@@ -1,0 +1,665 @@
+docs/cordis-tutorial/04-events.zh.md
+  s_c0ee42364b0c75::t_a750e846507b0f 82,92-120 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a919657e20ff0bb8b31cc1a","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":82},{"Range":[92,120]}]}]}
+docs/cordis-tutorial/06-composition-and-hmr.i18n.yaml
+  s_29c35885f3f0e7::t_25af242a09385f 5-6 gitai:{"mixed_line_ranges":[{"Range":[5,6]}],"operations":[{"operation_id":"6a9298c8e20ff0bb8b31cedc","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[5,6]}]}]}
+docs/cordis-tutorial/04-events.md
+  s_c0ee42364b0c75::t_5abafc247cd69b 82,92-120 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a919667e20ff0bb8b31cc3a","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":82},{"Range":[92,120]}]}]}
+docs/cordis-tutorial/06-composition-and-hmr.zh.md
+  s_29c35885f3f0e7::t_d5ceec6ca8cbea 65-67 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929cd3e20ff0bb8b31cf71","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[65,67]}]}]}
+  s_29c35885f3f0e7::t_5ced9b0b7f542f 9 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929554e20ff0bb8b31cd8e","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":9}]}]}
+  s_29c35885f3f0e7::t_02a2b8196249d9 20-22,37-39,41-42 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a92951ce20ff0bb8b31cd2f","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[20,22]},{"Range":[37,39]},{"Range":[41,42]}]}]}
+  s_29c35885f3f0e7::t_95a1d4c8e5a132 19,23-25,27-36,40 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929884e20ff0bb8b31ce3f","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":19},{"Range":[23,25]},{"Range":[27,36]},{"Single":40}]}]}
+  s_29c35885f3f0e7::t_66853f398edb4e 26 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a9298ace20ff0bb8b31ce8f","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":26}]}]}
+  s_29c35885f3f0e7::t_dc465e2936ce4d 48 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929d0fe20ff0bb8b31cfd5","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":48}]}]}
+docs/cordis-tutorial/06-composition-and-hmr.md
+  s_29c35885f3f0e7::t_c5fcf578987173 9,20-22,37-39,41-42 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929527e20ff0bb8b31cd53","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":9},{"Range":[20,22]},{"Range":[37,39]},{"Range":[41,42]}]}]}
+  s_29c35885f3f0e7::t_2a9f8bb893f49e 26 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a9298b4e20ff0bb8b31ceb3","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":26}]}]}
+  s_29c35885f3f0e7::t_e7dd3b2a6834d3 19,23-25,27-36,40 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929891e20ff0bb8b31ce63","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":19},{"Range":[23,25]},{"Range":[27,36]},{"Single":40}]}]}
+  s_29c35885f3f0e7::t_0d130e12e85541 65-67 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929cdfe20ff0bb8b31cf95","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[65,67]}]}]}
+  s_29c35885f3f0e7::t_18ef7804981cb2 48 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a929d18e20ff0bb8b31cff9","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Single":48}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6d1ae1c3a3d3ba5bde6e8d021ce643eed61161e3",
+  "prompts": {},
+  "humans": {
+    "h_200a9ca5cd7f1a": {
+      "author": "littlefishshow <1790326323@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_29c35885f3f0e7": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9294bce20ff0bb8b31ccf8",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "littlefishshow <1790326323@qq.com>"
+    },
+    "s_c0ee42364b0c75": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a9175f8e20ff0bb8b31cb96",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "littlefishshow <1790326323@qq.com>"
+    }
+  },
+  "attestation_metadata": {
+    "docs/cordis-tutorial/04-events.md": [
+      {
+        "hash": "s_c0ee42364b0c75::t_5abafc247cd69b",
+        "line_ranges": [
+          {
+            "Single": 82
+          },
+          {
+            "Range": [
+              92,
+              120
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a919667e20ff0bb8b31cc3a",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 82
+              },
+              {
+                "Range": [
+                  92,
+                  120
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/cordis-tutorial/04-events.zh.md": [
+      {
+        "hash": "s_c0ee42364b0c75::t_a750e846507b0f",
+        "line_ranges": [
+          {
+            "Single": 82
+          },
+          {
+            "Range": [
+              92,
+              120
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a919657e20ff0bb8b31cc1a",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 82
+              },
+              {
+                "Range": [
+                  92,
+                  120
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/cordis-tutorial/06-composition-and-hmr.i18n.yaml": [
+      {
+        "hash": "s_29c35885f3f0e7::t_25af242a09385f",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              6
+            ]
+          }
+        ],
+        "mixed_line_ranges": [
+          {
+            "Range": [
+              5,
+              6
+            ]
+          }
+        ],
+        "operations": [
+          {
+            "operation_id": "6a9298c8e20ff0bb8b31cedc",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  6
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/cordis-tutorial/06-composition-and-hmr.md": [
+      {
+        "hash": "s_29c35885f3f0e7::t_c5fcf578987173",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Range": [
+              20,
+              22
+            ]
+          },
+          {
+            "Range": [
+              37,
+              39
+            ]
+          },
+          {
+            "Range": [
+              41,
+              42
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929527e20ff0bb8b31cd53",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Range": [
+                  20,
+                  22
+                ]
+              },
+              {
+                "Range": [
+                  37,
+                  39
+                ]
+              },
+              {
+                "Range": [
+                  41,
+                  42
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_2a9f8bb893f49e",
+        "line_ranges": [
+          {
+            "Single": 26
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a9298b4e20ff0bb8b31ceb3",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 26
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_e7dd3b2a6834d3",
+        "line_ranges": [
+          {
+            "Single": 19
+          },
+          {
+            "Range": [
+              23,
+              25
+            ]
+          },
+          {
+            "Range": [
+              27,
+              36
+            ]
+          },
+          {
+            "Single": 40
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929891e20ff0bb8b31ce63",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 19
+              },
+              {
+                "Range": [
+                  23,
+                  25
+                ]
+              },
+              {
+                "Range": [
+                  27,
+                  36
+                ]
+              },
+              {
+                "Single": 40
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_0d130e12e85541",
+        "line_ranges": [
+          {
+            "Range": [
+              65,
+              67
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929cdfe20ff0bb8b31cf95",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  65,
+                  67
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_18ef7804981cb2",
+        "line_ranges": [
+          {
+            "Single": 48
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929d18e20ff0bb8b31cff9",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 48
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/cordis-tutorial/06-composition-and-hmr.zh.md": [
+      {
+        "hash": "s_29c35885f3f0e7::t_d5ceec6ca8cbea",
+        "line_ranges": [
+          {
+            "Range": [
+              65,
+              67
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929cd3e20ff0bb8b31cf71",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  65,
+                  67
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_5ced9b0b7f542f",
+        "line_ranges": [
+          {
+            "Single": 9
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929554e20ff0bb8b31cd8e",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 9
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_02a2b8196249d9",
+        "line_ranges": [
+          {
+            "Range": [
+              20,
+              22
+            ]
+          },
+          {
+            "Range": [
+              37,
+              39
+            ]
+          },
+          {
+            "Range": [
+              41,
+              42
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a92951ce20ff0bb8b31cd2f",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  20,
+                  22
+                ]
+              },
+              {
+                "Range": [
+                  37,
+                  39
+                ]
+              },
+              {
+                "Range": [
+                  41,
+                  42
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_95a1d4c8e5a132",
+        "line_ranges": [
+          {
+            "Single": 19
+          },
+          {
+            "Range": [
+              23,
+              25
+            ]
+          },
+          {
+            "Range": [
+              27,
+              36
+            ]
+          },
+          {
+            "Single": 40
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929884e20ff0bb8b31ce3f",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 19
+              },
+              {
+                "Range": [
+                  23,
+                  25
+                ]
+              },
+              {
+                "Range": [
+                  27,
+                  36
+                ]
+              },
+              {
+                "Single": 40
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_66853f398edb4e",
+        "line_ranges": [
+          {
+            "Single": 26
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a9298ace20ff0bb8b31ce8f",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 26
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_29c35885f3f0e7::t_dc465e2936ce4d",
+        "line_ranges": [
+          {
+            "Single": 48
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a929d0fe20ff0bb8b31cfd5",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Single": 48
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "s_29c35885f3f0e7": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_02a2b8196249d9": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_0d130e12e85541": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_18ef7804981cb2": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_25af242a09385f": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_2a9f8bb893f49e": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_5ced9b0b7f542f": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_66853f398edb4e": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_95a1d4c8e5a132": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_966de5cbf6554f": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_c5fcf578987173": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_d5ceec6ca8cbea": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_dc465e2936ce4d": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_29c35885f3f0e7::t_e7dd3b2a6834d3": {
+      "tool": "trae",
+      "conversation_id": "6a9294bce20ff0bb8b31ccf8",
+      "session_id": "6a9294bce20ff0bb8b31ccf8",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_c0ee42364b0c75": {
+      "tool": "trae",
+      "conversation_id": "6a9175f8e20ff0bb8b31cb96",
+      "session_id": "6a9175f8e20ff0bb8b31cb96",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_c0ee42364b0c75::t_5abafc247cd69b": {
+      "tool": "trae",
+      "conversation_id": "6a9175f8e20ff0bb8b31cb96",
+      "session_id": "6a9175f8e20ff0bb8b31cb96",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_c0ee42364b0c75::t_a750e846507b0f": {
+      "tool": "trae",
+      "conversation_id": "6a9175f8e20ff0bb8b31cb96",
+      "session_id": "6a9175f8e20ff0bb8b31cb96",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_fbfd60dcd56239": {
+      "tool": "trae",
+      "conversation_id": "6a900de7e20ff0bb8b31c9e4",
+      "session_id": "6a900de7e20ff0bb8b31c9e4",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_fbfd60dcd56239::t_57317d005c4214": {
+      "tool": "trae",
+      "conversation_id": "6a900de7e20ff0bb8b31c9e4",
+      "session_id": "6a900de7e20ff0bb8b31c9e4",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}
