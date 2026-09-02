@@ -332,6 +332,17 @@ describe('cell (render-layer session kit)', () => {
     expect(historyCalls().map(c => (c.payload as { sessionId: string }).sessionId)).toEqual(['s1', 's2'])
   })
 
+  it('ensureOpen opens a background session without changing the current selection', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    b.svc.open(sid('s1'))
+    b.svc.ensureOpen(sid('s2'))
+
+    expect(b.svc.list.getSnapshot().current).toBe('s1')
+    expect(b.api.calls.filter(c => c.method === 'session.history')
+      .map(c => (c.payload as { sessionId: string }).sessionId)).toEqual(['s1', 's2'])
+  })
+
   it('startup restore: a persisted selection validated by the first projection opens its window unprompted', async () => {
     const storage = new Map<string, string>([
       ['dsh.sessions.current', JSON.stringify({ sessionId: 's1' })],

@@ -1,12 +1,11 @@
 /** Trajectory view: compact summary over a turn-aware event ledger. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   AssistantBlock, AssistantMessageNode, ConversationSnapshot,
   SnapshotStore,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SnapshotSelectorHook, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   TrajectoryTable,
   type TrajectoryRequestNumber,
@@ -73,6 +72,24 @@ export interface TrajectoryViewInjected {
   setActualDuration: (actualDuration: boolean) => void
 }
 
+/** Minimal props consumed by the shared trajectory renderer. */
+export interface TrajectoryViewProps {
+  /** Selector hook over the Session whose durable trajectory is displayed. */
+  useSession: SnapshotSelectorHook<ConversationSnapshot>
+  /** Browser-wide duration-display preference. */
+  useDuration: SnapshotSelectorHook<boolean>
+  /** Load one earlier history page and report whether the trajectory changed. */
+  loadOlder: () => Promise<boolean>
+  /** Update the browser-wide duration-display preference. */
+  setActualDuration: (actualDuration: boolean) => void
+  /** Optional tool-call inspection handoff. */
+  inspect?: { callId: string } | null
+  /** Acknowledge an applied inspection handoff. */
+  onInspectDone?: () => void
+  /** Trajectory dictionary translator. */
+  t: TranslateNS<'trajectory'>
+}
+
 interface UsageLike {
   inputTokens?: number
   cacheReadTokens?: number
@@ -120,7 +137,7 @@ function addUsage(
 export function TrajectoryView({
   useSession, useDuration, loadOlder, setActualDuration,
   inspect, onInspectDone, t,
-}: ConvViewProps & InjectFace<TrajectoryViewInjected> & PropsLocale<'trajectory'>) {
+}: TrajectoryViewProps) {
   const [collapsedTurns, setCollapsedTurns] = useState<ReadonlySet<number>>(EMPTY_TURN_IDS)
   const [collapsedAssistants, setCollapsedAssistants] =
     useState<ReadonlySet<string>>(EMPTY_RECORD_IDS)

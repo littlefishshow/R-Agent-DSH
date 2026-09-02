@@ -1,0 +1,32 @@
+# File Workbench bundle patch. A profile lists this bundle after dsh-base and
+# dsh-web-app; the composer applies this layer over their rows. It adds a
+# "File Workspace" to the Web GUI: Chat and Files project the same Workspace
+# list as sessions or filesystem trees, with a Markdown reader replacing the
+# conversation center and selection modify/ask sub-windows backed by real dsh
+# child sessions (so compaction, the session log, and the trajectory view are
+# reused), and minimize-to-highlight behavior.
+#
+# A later layer wins by id and a patch replaces the targeted row's whole config,
+# so each row below is self-contained. The bundle's own package.json depends on
+# these plugins and the compatible UI packages their client contracts extend,
+# so pnpm links them into the profile and the config-tree anchor resolves them
+# by name.
+
+# The mode-switched workbench frame REPLACES the base layout, so the base
+# ui-layout row is disabled and the workbench frame takes the 'root' slot.
+- id: ui-layout
+  disabled: true
+
+- insert:
+    # Host file IO backend: the /rpc-fileworkbench Connection RPC channel over
+    # absolute Node filesystem paths (loopback-only by default).
+    - id: fileworkbench-io
+      name: '@deepseek-ai/dsh-host-fileworkbench-io'
+
+    # The three-column shell whose center switches between Chat and Files.
+    - id: ui-layout-workbench
+      name: '@deepseek-ai/dsh-client-ui-layout-workbench'
+
+    # The shared-Workspace filesystem projection, reader, and sub-windows.
+    - id: ui-file-workspace
+      name: '@deepseek-ai/dsh-client-ui-file-workspace'

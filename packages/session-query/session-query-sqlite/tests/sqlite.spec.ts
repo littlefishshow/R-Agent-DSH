@@ -91,6 +91,12 @@ class TestPersistence extends SessionPersistence {
     return undefined
   }
 
+  delete(id: SessionIdType): Promise<boolean> {
+    const deleted = TestPersistence.entries.delete(id)
+    TestPersistence.revisions.delete(id)
+    return Promise.resolve(deleted)
+  }
+
   static reset(entries: readonly { meta: SessionHeader; events: SessionEvent[] }[] = []): void {
     this.entries = new Map()
     this.revisions = new Map()

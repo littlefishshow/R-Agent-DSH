@@ -184,7 +184,7 @@ export class TestSessions implements ISessions {
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
+    method: 'open' | 'ensureOpen' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
       | 'clear' | 'search' | 'fork'
     args: unknown[]
   }[] = []
@@ -411,6 +411,12 @@ export class TestSessions implements ISessions {
       draft.current = id
       draft.currentAddress = undefined
     })
+  }
+
+  /** Record a background-open request without changing the selected fixture Session. */
+  ensureOpen(id: SessionId): void {
+    this.calls.push({ method: 'ensureOpen', args: [id] })
+    this.require(id)
   }
 
   /** Open an existing fixture through its catalog address. */

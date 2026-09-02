@@ -2,7 +2,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import {
+  apply, inject, type IWorkspacePresentation,
+} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
@@ -57,6 +59,30 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
     expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale', 'connection'])
+  })
+
+  it('provides a default-off, reference-counted fork-lineage presentation control', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const presentation = b.ctx.get('workspacePresentation') as IWorkspacePresentation
+    const snapshots: boolean[] = []
+    const unsubscribe = presentation.forkLineage.subscribe(() => {
+      snapshots.push(presentation.forkLineage.getSnapshot())
+    })
+
+    expect(presentation.forkLineage.getSnapshot()).toBe(false)
+    const releaseFirst = presentation.retainForkLineage()
+    const releaseSecond = presentation.retainForkLineage()
+    expect(presentation.forkLineage.getSnapshot()).toBe(true)
+    releaseFirst()
+    expect(presentation.forkLineage.getSnapshot()).toBe(true)
+    releaseSecond()
+    expect(presentation.forkLineage.getSnapshot()).toBe(false)
+    expect(snapshots).toEqual([true, false])
+
+    unsubscribe()
+    await fiber.dispose()
   })
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {

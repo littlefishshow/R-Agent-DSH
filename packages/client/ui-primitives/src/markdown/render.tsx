@@ -4,12 +4,12 @@
  * cache frozen blocks as React elements; the rendered DOM is pinned
  * byte-for-byte by `tests/fixtures/markdown-dom` and must not drift.
  *
- * Untrusted-output policy (unchanged from the replaced pipeline): link and
- * image destinations pass a protocol allowlist, images additionally require
- * absolute HTTP(S), raw HTML renders as literal text (no HTML enters the
- * DOM), and KaTeX runs without trusted commands. Fragment-anchor URLs fail
- * the allowlist, so footnote references and back-references render as plain
- * text rather than in-page links.
+ * Untrusted-output policy: link destinations pass a protocol allowlist,
+ * images require absolute HTTP(S) unless the owning settled view explicitly
+ * resolves their authored URL, raw HTML renders as literal text (no HTML
+ * enters the DOM), and KaTeX runs without trusted commands. Fragment-anchor
+ * URLs fail the allowlist, so footnote references and back-references render
+ * as plain text rather than in-page links.
  *
  * Merge-extensible node unions fall through the documented default (render
  * nothing) rather than ending in assertNever: grammars registered elsewhere
@@ -115,6 +115,16 @@ export interface MarkdownFileMentions {
   resolve(value: string): { open: () => void; label: string; title: string } | undefined
 }
 
+/** Trusted owner-side resolver for non-HTTP Markdown image destinations. */
+export interface MarkdownImageSources {
+  /**
+   * Resolve one normalized authored image URL.
+   * @param url - normalized Markdown image destination.
+   * @returns a browser-safe source, or undefined to keep the alt-text fallback.
+   */
+  resolve(url: string): string | undefined
+}
+
 /**
  * One render pass's state: immutable options and targets plus the footnote
  * numbering accumulated in document order while references render.
@@ -128,6 +138,8 @@ export interface MarkdownRenderContext {
   readonly inBlockquote?: boolean
   /** Inline-code file mentions; absent wherever no opener vocabulary exists. */
   readonly fileMentions: MarkdownFileMentions | undefined
+  /** Explicit image resolver; absent keeps the default HTTP(S)-only policy. */
+  readonly imageSources: MarkdownImageSources | undefined
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -285,7 +297,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     case 'linkReference':
       return renderLinkReference(node, key, context)
     case 'image':
-      return renderImage(node.url, node.alt ?? '', key)
+      return renderImage(node.url, node.alt ?? '', key, context)
     case 'imageReference':
       return renderImageReference(node, key, context)
     case 'footnoteReference':
@@ -489,8 +501,9 @@ function inlineCodeHttpUrl(value: string): string | undefined {
   }
 }
 
-function renderImage(url: string, alt: string, key: Key): ReactNode {
-  const imageSrc = remoteImageUrl(sanitizeUrl(normalizeUri(url)))
+function renderImage(url: string, alt: string, key: Key, context: MarkdownRenderContext): ReactNode {
+  const normalized = normalizeUri(url)
+  const imageSrc = remoteImageUrl(sanitizeUrl(normalized)) ?? context.imageSources?.resolve(normalized)
   if (imageSrc === undefined) {
     return <span key={key} className={css.imageAlt}>{alt}</span>
   }
@@ -537,7 +550,7 @@ function renderImageReference(
 ): ReactNode {
   const definition = context.targets.definitions.get(node.identifier.toUpperCase())
   if (definition === undefined) return `![${node.alt ?? ''}${referenceSuffix(node)}`
-  return renderImage(definition.url, node.alt ?? '', key)
+  return renderImage(definition.url, node.alt ?? '', key, context)
 }
 
 function renderFootnoteReference(

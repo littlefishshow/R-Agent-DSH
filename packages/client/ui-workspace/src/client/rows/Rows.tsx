@@ -436,7 +436,10 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
           {showStatus && <SessionStatusDots statuses={statuses} />}
         </span>
       )}
-      <span className={css.title}>{title}</span>
+      <span className={css.title} style={(node.depth ?? 0) > 0 ? { paddingLeft: (node.depth ?? 0) * 18 } : undefined}>
+        {(node.depth ?? 0) > 0 && <IconBranchOutline16 size={14} />}
+        {title}
+      </span>
       {/* A blank New Session row is a provisional placeholder: nothing has
           happened in it yet, so a "now" timestamp and the row verbs
           (rename/fork/archive) would all act on content that does not

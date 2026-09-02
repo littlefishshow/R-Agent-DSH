@@ -19,17 +19,20 @@ import {
   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
   wrapBlockChildren,
 } from './render.tsx'
-import type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownRenderContext, ReferenceTargets } from './render.tsx'
+import type {
+  MarkdownCodeLabels, MarkdownFileMentions, MarkdownImageSources, MarkdownRenderContext, ReferenceTargets,
+} from './render.tsx'
 import 'katex/dist/katex.min.css'
 import css from './MarkdownText.module.css'
 
-export type { MarkdownCodeLabels, MarkdownFileMentions } from './render.tsx'
+export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownImageSources } from './render.tsx'
 
 /** One settled full render: parse with math, resolve references, append the footnote section. */
 function renderSettled(
   text: string,
   codeLabels: MarkdownCodeLabels | undefined,
   fileMentions: MarkdownFileMentions | undefined,
+  imageSources: MarkdownImageSources | undefined,
 ): ReactNode[] {
   const root = parseGfmWithMath(text)
   const targets = createReferenceTargets()
@@ -38,6 +41,7 @@ function renderSettled(
     streaming: false,
     codeLabels,
     fileMentions,
+    imageSources,
     targets,
     footnoteOrder: [],
     footnoteCounts: new Map(),
@@ -102,6 +106,7 @@ class StreamingRenderer {
         streaming: true,
         codeLabels: this.codeLabels,
         fileMentions: undefined,
+        imageSources: undefined,
         targets: frameTargets,
         footnoteOrder: this.frozenFootnoteOrder,
         footnoteCounts: this.frozenFootnoteCounts,
@@ -120,6 +125,7 @@ class StreamingRenderer {
       streaming: true,
       codeLabels: this.codeLabels,
       fileMentions: undefined,
+      imageSources: undefined,
       targets: frameTargets,
       footnoteOrder: [...this.frozenFootnoteOrder],
       footnoteCounts: new Map(this.frozenFootnoteCounts),
@@ -151,26 +157,30 @@ class StreamingRenderer {
  * must not bake in handlers that could go stale.
  * @returns A GFM document with TeX math rendered through KaTeX; raw HTML,
  * relative links, and unsafe protocols are disabled, while absolute HTTP(S)
- * images render directly.
+ * images render directly and an explicit owner resolver may authorize other
+ * image sources for settled content.
  */
-export const MarkdownText = memo(function MarkdownText({ text, streaming = false, codeLabels, fileMentions }: {
+export const MarkdownText = memo(function MarkdownText({
+  text, streaming = false, codeLabels, fileMentions, imageSources,
+}: {
   text: string
   streaming?: boolean
   codeLabels?: MarkdownCodeLabels | undefined
   fileMentions?: MarkdownFileMentions | undefined
+  imageSources?: MarkdownImageSources | undefined
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
   const streamLabelsRef = useRef<MarkdownCodeLabels | undefined>(codeLabels)
   const children = useMemo(() => {
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, codeLabels, fileMentions)
+      return renderSettled(text, codeLabels, fileMentions, imageSources)
     }
     if (streamRef.current === null || streamLabelsRef.current !== codeLabels) {
       streamRef.current = new StreamingRenderer(codeLabels)
       streamLabelsRef.current = codeLabels
     }
     return streamRef.current.render(text)
-  }, [text, streaming, codeLabels, fileMentions])
+  }, [text, streaming, codeLabels, fileMentions, imageSources])
   return <div className={css.markdown}>{children}</div>
 })

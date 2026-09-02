@@ -147,6 +147,21 @@ describe('workspace browser rows', () => {
     expect(onOpen).toHaveBeenCalledWith(node.id)
   })
 
+  it('indents an ordinary fork and marks it with the branch icon', () => {
+    const node: SessionNode = {
+      id: sid('child'), title: 'Selection branch', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, depth: 2,
+    }
+    render(
+      <SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />,
+    )
+
+    const title = screen.getByText('Selection branch')
+    expect(title.style.paddingLeft).toBe('36px')
+    expect(title.querySelector('svg')).not.toBeNull()
+  })
+
   it('shows the green done dot only on a finished, unviewed session (live activity wins the slot)', () => {
     const renderRow = (over: Partial<SessionNode>) => render(
       <SessionNodeItem

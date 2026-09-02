@@ -173,6 +173,9 @@
 
 .title {
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

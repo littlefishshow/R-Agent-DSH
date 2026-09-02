@@ -6,7 +6,7 @@
 
 ## Cordis 配置项不只有名称
 
-Cordis 配置项除了 `name` 和 `config`，还接受其他元数据：
+Cordis 配置项可以理解为列表里的一个固定位置：`name` 说明要加载哪个插件，`config` 传给插件，其他元数据则告诉 loader 如何管理这个位置。最常用的是 `id` 和 `disabled`：
 
 ```yaml
 - id: greeter          # stable identity for this entry
@@ -16,13 +16,36 @@ Cordis 配置项除了 `name` 和 `config`，还接受其他元数据：
   disabled: true       # keep the entry, skip mounting it
 ```
 
-`id` 为 Cordis 配置项提供稳定标识，使 loader 能区分修改现有 Cordis 配置项与先删除再添加。`disabled: true` 会卸载插件而不删除其 Cordis 配置项；改回原值后，插件以及所有因依赖其服务而处于 PENDING 的插件都会再次加载。
+把 `id` 当成这项配置的固定标签会更容易理解。保存 `cordis.yml` 时，loader 先用 `id` 配对新旧列表里的配置项，而不是先看 `name`。假设原来是这项配置：
+
+```yaml
+- id: greeter
+  name: './greeter.ts'
+```
+
+如果只把插件实现改成 `./greeter-v2.ts`，但保留 `id: greeter`，loader 会把它当成同一项配置的内容变了。因为 `name` 变了，旧插件实例会卸载，新插件实例会启动；但配置项身份仍然是 `greeter`，按 id 查询、禁用或诊断时还是这同一项。
+
+```yaml
+- id: greeter
+  name: './greeter-v2.ts'
+```
+
+如果同时把 `id` 也改掉，loader 就看不到原来的 `greeter` 了。它会把旧项当成被删除，把 `greeter-v2` 当成新增项。最后运行的插件可能同样是 `./greeter-v2.ts`，但对 loader 来说这是另一项配置：旧项的状态被结束，新的 id 要用新的名字查找、禁用或诊断。
+
+```yaml
+- id: greeter-v2
+  name: './greeter-v2.ts'
+```
+
+实际写配置时，可以用一条规则判断：还是承担同一职责的插件，就保留 `id`；它已经是组合里的另一项职责，才换新的 `id`。显式写 `id` 对 HMR 尤其重要：没有 `id` 的配置项每次读取都会得到一个生成值，所以只要配置文件被保存，loader 就无法确认它还是原来的那一项。
+
+`disabled: true` 适合临时关掉某个插件，但保留它在配置文件里的位置。loader 会卸载这个插件；把 `disabled` 改回 `false` 或删掉这一行后，它会重新挂载。若其他插件因为依赖它提供的服务而停在 PENDING，那些插件也会在服务回来后继续加载。
 
 组可以嵌套一份 Cordis 配置项子列表，并将其作为一个单元加载和卸载；`isolate` 则为一个组提供某项服务名称的独立实例，因此两个组可以各自看到配置不同的 `shell` 提供方，互不影响。[Cordis 入门](../cordis-primer.zh.md)和[服务隔离示例](../user/develop/framework/service.zh.md#service-isolation)介绍了详细内容。
 
 ## 热模块替换
 
-卸载会释放 effect（[第 2 章](02-lifecycle-and-effects.zh.md)），加载则遵循依赖关系（[第 3 章](03-services.zh.md)），因此 HMR 可以先卸载、再加载，以替换正在运行的插件。`@deepseek-ai/cordis-plugin-hmr` 插件会监视文件，并在保存时执行这一过程。
+这里的 HMR 是 Hot Module Replacement（热模块替换）的缩写，指保存文件后，不重启整个进程，只替换受影响的插件。Cordis 已经知道如何卸载插件并释放 effect（[第 2 章](02-lifecycle-and-effects.zh.md)），也知道如何按服务依赖重新加载插件（[第 3 章](03-services.zh.md)），所以 HMR 插件只需要做中间的调度：监视文件变化，判断要替换哪些插件，然后触发卸载和重新加载。
 
 在 `tmp/cordis-tutorial` 中编写 `cordis.yml`：
 
@@ -39,7 +62,9 @@ Cordis 配置项除了 `name` 和 `config`，还接受其他元数据：
   name: './hello.ts'
 ```
 
-列表中增加了两个辅助插件：HMR 通过 Cordis logger 服务记录日志，因此没有控制台导出器时看不到其消息；它还会 `inject` `timer` 服务来实现去抖，如果没有 `@deepseek-ai/cordis-plugin-timer`，它就会永远停在 PENDING，而且不发出任何提示。下一节就讨论这种静默状态。
+这份列表里有三个和 HMR 相关的配置项，但职责不同。`@deepseek-ai/cordis-plugin-hmr` 是真正执行热重载的插件：它监视 `root: ['.']` 指定的目录，并在文件变化时触发重载。
+
+另外两个插件是 HMR 运行时需要的配套能力。`@deepseek-ai/cordis-plugin-logger-console` 把 Cordis 日志输出到终端；没有它，HMR 仍可能在工作，但你看不到 `watching`、`reload plugin` 或失败日志。`@deepseek-ai/cordis-plugin-timer` 提供 `ctx.debounce()`，HMR 用它把一次保存产生的多次文件事件合并成一次重载；HMR 声明了对 `timer` 服务的依赖，所以没有这个插件时，HMR 自己会停在 PENDING，连文件监听都不会开始。下一节就讨论这种静默状态。
 
 HMR 通过 Loader 的原生辅助工具读取 Node 的 loader 内部结构。请在 tsx 下运行 Cordis：
 

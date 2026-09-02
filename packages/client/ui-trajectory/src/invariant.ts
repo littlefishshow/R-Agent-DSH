@@ -15,10 +15,9 @@ export const name = 'client-ui-trajectory-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: a pure-consumer plugin — it emits no cordis events
- * and owns no mutable cross-plugin state; its view-slot registration is a
- * plain effect whose disposal the slot ledger's own specs and this
- * package's behavior specs observe directly.
+ * No runtime invariant: the slot ledger owns view registration and Cordis
+ * owns the embedded presentation service lifetime; behavior tests observe
+ * both disposal paths directly.
  */
 const install: InvariantInstaller = () => {}
 

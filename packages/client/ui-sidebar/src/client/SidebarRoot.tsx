@@ -190,7 +190,13 @@ export function SidebarRoot({
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}
       <div className={css.regionArea}>
-        {renderSlot('sidebar.workspaces', {
+        <div className={css.regionBase}>
+          {renderSlot('sidebar.workspaces', {
+            wide,
+            expandSidebar: () => { if (collapsed) toggleSidebar() },
+          })}
+        </div>
+        {renderSlot('sidebar.workspaces.overlay', {
           wide,
           expandSidebar: () => { if (collapsed) toggleSidebar() },
         })}

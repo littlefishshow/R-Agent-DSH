@@ -245,6 +245,8 @@ type SessionTreeProps = Pick<
   onSessionArchive: (sessionId: SessionNode['id']) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
+  /** Whether grouped rows project ordinary fork lineage. */
+  forkLineage: boolean
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
@@ -253,7 +255,8 @@ function SessionTree({
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
-  sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
+  sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
+  forkLineage, home, t,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const current = list.current
@@ -326,8 +329,9 @@ function SessionTree({
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
+      forkLineage,
     }),
-    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount],
+    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount, forkLineage],
   )
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
@@ -545,10 +549,11 @@ function SessionTree({
   )
 }
 
-/** The flat "In one list" body: every session is one draggable top-level row. */
+/** The "In one list" body; retained fork lineage replaces peer rows with an indented tree. */
 function FlatList({
   useSessions, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds,
-  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t,
+  orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder,
+  forkLineage, t,
 }: Pick<
   SessionTreeProps,
   | 'useSessions'
@@ -562,17 +567,18 @@ function FlatList({
   | 'sessionUpdatedAtByAccount'
   | 'syncSessionOrderAccount'
   | 'setSessionOrder'
+  | 'forkLineage'
   | 't'
 >) {
   const list = useSessions(s => s)
   const baseRows = useMemo(
-    () => deriveFlat(list, archivedSessionIds),
-    [list, archivedSessionIds],
+    () => deriveFlat(list, archivedSessionIds, forkLineage),
+    [list, archivedSessionIds, forkLineage],
   )
   const sessionIds = useMemo(() => baseRows.map(row => row.id), [baseRows])
   const previousOrderBy = useRef(orderBy)
   useEffect(() => {
-    if (list.phase !== 'ready') return
+    if (list.phase !== 'ready' || forkLineage) return
     const previousOrder = sessionOrderByAccount[FLAT_SESSION_ORDER_KEY]
     const previousUpdatedAt = sessionUpdatedAtByAccount[FLAT_SESSION_ORDER_KEY] ?? {}
     const switchedToUpdated = previousOrderBy.current !== 'updated' && orderBy === 'updated'
@@ -588,15 +594,16 @@ function FlatList({
     if (next.changed) {
       syncSessionOrderAccount(FLAT_SESSION_ORDER_KEY, next.order.map(id => id as string), next.updatedAt)
     }
-  }, [list, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, sessionIds, syncSessionOrderAccount])
+  }, [list, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, sessionIds, syncSessionOrderAccount, forkLineage])
   const rows = useMemo(() => {
+    if (forkLineage) return baseRows
     const byId = new Map(baseRows.map(row => [row.id, row]))
     return reconciledSessionOrder(sessionIds, sessionOrderByAccount[FLAT_SESSION_ORDER_KEY])
       .flatMap((id) => {
         const row = byId.get(id)
         return row === undefined ? [] : [row]
       })
-  }, [baseRows, sessionOrderByAccount, sessionIds])
+  }, [baseRows, forkLineage, sessionOrderByAccount, sessionIds])
   const [drag, setDrag] = useState<DragState | null>(null)
   const dropCommitted = useRef(false)
   useNativeDragAcceptance(drag !== null)
@@ -635,8 +642,8 @@ function FlatList({
               onRename={onSessionRename}
               onFork={forkSession}
               onArchive={onSessionArchive}
-              flat
-              drag={{
+              flat={!forkLineage}
+              drag={forkLineage ? undefined : {
                 start: () => {
                   dropCommitted.current = false
                   setDrag({ accountKey: FLAT_SESSION_ORDER_KEY, sessionId: node.id, over: null })
@@ -762,10 +769,12 @@ export function WorkspaceBrowser({
   searchResultLimit,
   useDirectoryFlow,
   useHostDescription,
+  useForkLineage,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostDescription(description => description?.home)
+  const forkLineage = useForkLineage(enabled => enabled)
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
@@ -1160,6 +1169,7 @@ export function WorkspaceBrowser({
                 useSessions={useSessions} open={open} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
                 archivedSessionIds={archivedSessionIds}
+                forkLineage={forkLineage}
                 orderBy={orderBy}
                 sessionOrderByAccount={sessionOrderByAccount}
                 sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
@@ -1187,6 +1197,7 @@ export function WorkspaceBrowser({
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}
+                forkLineage={forkLineage}
                 home={home}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {

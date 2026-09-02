@@ -184,6 +184,13 @@ export interface PersistenceBackend<TornMarker = unknown> {
   appendBatch(meta: SessionHeader, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void>
 
   /**
+   * Permanently remove one materialized session from the backend.
+   * @param id - session identity to remove.
+   * @returns whether durable storage contained the session.
+   */
+  deleteStored(id: SessionId): Promise<boolean>
+
+  /**
    * Make a crash repair durable: truncate the torn tail (iff
    * `tornMarker !== undefined`) and append `closers` (iff any). NOT required to
    * be atomic — a file backend may truncate-then-append in two fsync'd steps.
@@ -677,6 +684,28 @@ export class PersistenceCoordinator<TornMarker = unknown> {
       throw new TypeError('session event batch is not losslessly JSON-serializable because it contains non-JSON-serializable data')
     }
     return this.serialize(id, () => this.appendCore(id, batch))
+  }
+
+  /**
+   * Permanently remove a non-live session after its write lifecycle has retired.
+   * @param id - session identity to remove.
+   * @returns whether durable storage contained the session.
+   */
+  async delete(id: SessionId): Promise<boolean> {
+    if (this.ctx.sessions.get(id) !== undefined) {
+      throw new Error(`cannot delete session "${id}" while it is live`)
+    }
+    await this.waitForRetirement(id)
+    return this.serialize(id, async () => {
+      if (this.ctx.sessions.get(id) !== undefined) {
+        throw new Error(`cannot delete session "${id}" while it is live`)
+      }
+      this.preparations.assertWritable(id)
+      const deleted = await this.backend.deleteStored(id)
+      this.preparations.invalidate(id)
+      this.states.delete(id)
+      return deleted
+    })
   }
 
   private async appendCore(id: SessionId, events: readonly SessionEvent[]): Promise<void> {

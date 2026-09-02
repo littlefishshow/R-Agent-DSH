@@ -141,7 +141,7 @@ describe('deriveGroups', () => {
     ).items[0]).toMatchObject({ id: parent.id, runningSubagentCount: 2 })
   })
 
-  it('ignores fork lineage and sorts every ungrouped session as a top-level row', () => {
+  it('places ordinary fork descendants after their parent and leaves invalid lineage at depth zero', () => {
     const parent = summary('parent', 1)
     const oldChild = { ...summary('old-child', 10), parentId: parent.id }
     const newChild = { ...summary('new-child', 20), parentId: parent.id }
@@ -155,18 +155,37 @@ describe('deriveGroups', () => {
       list(parent, oldChild, newChild, tieB, tieA, self, orphan, cycleA, cycleB),
       [],
       noArchive,
-      { expandedGroups: [UNGROUPED_KEY] },
+      { expandedGroups: [UNGROUPED_KEY], forkLineage: true },
     )
 
     expect(groups).toHaveLength(1)
     expect(groups[0]!.sessions.map(node => node.id)).toEqual([
-      newChild.id, tieA.id, tieB.id, oldChild.id,
-      cycleB.id, cycleA.id, orphan.id, self.id, parent.id,
+      cycleB.id, cycleA.id, orphan.id, self.id,
+      parent.id, newChild.id, tieA.id, tieB.id, oldChild.id,
+    ])
+    expect(groups[0]!.sessions.map(node => node.depth)).toEqual([
+      0, 0, 0, 0, 0, 1, 1, 1, 1,
     ])
 
-    // Equal timestamps use ids as a deterministic tiebreak in either input order.
+    // Equal timestamps use ids as a deterministic tiebreak before lineage is applied.
     expect(deriveGroups(list(summary('tie-a', 1), summary('tie-b', 1)), [], noArchive, view([UNGROUPED_KEY]))[0]!
       .sessions.map(node => node.id)).toEqual([sid('tie-a'), sid('tie-b')])
+  })
+
+  it('keeps ordinary forks as peer rows unless an extension enables lineage', () => {
+    const parent = summary('parent', 1)
+    const child = { ...summary('child', 2), parentId: parent.id }
+    const groups = deriveGroups(
+      list(parent, child),
+      [workspace('project', ['parent', 'child'])],
+      noArchive,
+      view(['project']),
+    )
+
+    expect(groups[0]!.sessions.map(node => [node.id, node.depth])).toEqual([
+      [parent.id, 0],
+      [child.id, 0],
+    ])
   })
 
   it('tolerates Workspace membership arriving before its Session summary', () => {
@@ -213,6 +232,21 @@ describe('deriveFlat', () => {
     const tieA = summary('tie-a', 20)
     const rows = deriveFlat(list(parent, child, tieB, tieA), noArchive)
     expect(rows.map(row => row.id)).toEqual([sid('child'), sid('tie-a'), sid('tie-b'), sid('parent')])
+  })
+
+  it('retains ordinary fork trees in the flat view when an extension enables lineage', () => {
+    const parent = summary('document.md', 1)
+    const first = { ...summary('first question', 30), parentId: parent.id }
+    const second = { ...summary('second question', 20), parentId: parent.id }
+    const unrelated = summary('unrelated', 10)
+
+    expect(deriveFlat(list(parent, first, second, unrelated), noArchive, true)
+      .map(row => [row.id, row.depth])).toEqual([
+      [unrelated.id, 0],
+      [parent.id, 0],
+      [first.id, 1],
+      [second.id, 1],
+    ])
   })
 
   it('hides subagent-origin rows but keeps ordinary forks', () => {

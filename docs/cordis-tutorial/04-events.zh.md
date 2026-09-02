@@ -79,7 +79,7 @@ export function apply(ctx: Context) {
 
 ## 分发模式
 
-`emit` 是 5 种分发模式之一。事件采用哪种模式是其约定的一部分，决定了监听器能否返回值、能否并发运行，以及能否彼此短路：
+`emit` 是 5 种分发模式之一。分发模式不是监听器自己选择的，而是发出事件的一方通过 `ctx.emit()`、`ctx.parallel()` 等调用方式选择的；它决定 Cordis 如何调用已经注册的监听器，以及调用方会不会等待它们完成、读取它们的返回值，或允许其中一个监听器提前结束整次分发。
 
 | 模式 | 调用 | 语义 |
 |---|---|---|
@@ -88,6 +88,36 @@ export function apply(ctx: Context) {
 | serial | `await ctx.serial(name, ...args)` | 监听器按顺序运行并等待；第一个非 `null`/`false`/`undefined` 返回值胜出，并停止后续监听器。 |
 | bail | `ctx.bail(name, ...args)` | serial 的同步版本。 |
 | waterfall（瀑布式事件） | `ctx.waterfall(name, ...args, next)` | 环绕中间件，见下文。 |
+
+通俗地说，先看发出事件的一方想要什么结果：
+
+- `emit` 像“通知一下”：告诉所有监听器发生了某事，然后立刻继续往下执行。它适合日志、统计、状态广播这类不需要结果的事件。
+- `parallel` 像“请大家同时处理，并等大家都做完”：监听器可以是异步函数，Cordis 会并发启动它们，并等待全部完成。它适合多个互不依赖的异步副作用。
+- `serial` 像“按顺序问，谁给出有效答案就用谁的”：Cordis 会等待第一个监听器完成，再调用下一个；只要某个监听器返回非 `null`、非 `false`、非 `undefined` 的值，就停止后面的监听器，并把这个值返回给调用方。
+- `bail` 是 `serial` 的同步版本：规则一样，但监听器不能靠 `await` 排队完成异步工作。
+- `waterfall` 像一层层包装的中间件：每个监听器决定是否调用 `next()` 继续往里走。下一节会专门展开。
+
+下面这个例子只展示 `emit` 和 `parallel` 的差别。两个监听器都返回 promise 时，`emit` 不会等它们完成；`parallel` 会等两个 promise 都完成后再继续：
+
+```ts ignore-check
+ctx.on('demo/job', async (label) => {
+  await wait(100)
+  console.log(`${label}: slow listener`)
+})
+
+ctx.on('demo/job', async (label) => {
+  await wait(10)
+  console.log(`${label}: fast listener`)
+})
+
+ctx.emit('demo/job', 'emit')
+console.log('emit returned')
+
+await ctx.parallel('demo/job', 'parallel')
+console.log('parallel returned')
+```
+
+`emit returned` 会先打印，因为 `emit` 只负责触发监听器，不等待异步结果；`parallel returned` 会在两个监听器都打印之后才出现。`serial` 和 `bail` 关注的是“按顺序找第一个有效返回值”，所以更常用于决策类事件，而不是普通广播。
 
 每个 harness 事件都会在其所属[子系统页面](../subsystems/core.zh.md)自动生成的参考文档中记录其模式。
 

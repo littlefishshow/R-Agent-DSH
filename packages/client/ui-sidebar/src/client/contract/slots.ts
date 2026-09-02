@@ -3,9 +3,11 @@
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
  * owns column geometry (fold state machine, brand row, New Session);
  * everything between the section header and the list bottom is the
- * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
- * `sidebar.settings` registrant's (ui-settings), followed by optional footer
- * actions in `sidebar.footer.action`.
+ * `sidebar.workspaces` registrant's (ui-workspace). An optional
+ * `sidebar.workspaces.overlay` occupant can replace that region visually while
+ * leaving it mounted. The foot is the `sidebar.settings` registrant's
+ * (ui-settings), followed by optional footer actions in
+ * `sidebar.footer.action`.
  */
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-layout's SlotMap merge (the 'sidebar' entry) into every
@@ -33,6 +35,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * registers the browser.
      */
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    /**
+     * Optional projection rendered over the workspace/session browser. The
+     * occupant decides when to draw; the original browser remains mounted
+     * beneath it so transient search and expansion state survive.
+     */
+    'sidebar.workspaces.overlay': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -112,6 +120,7 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.workspaces'
+    | 'sidebar.workspaces.overlay'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >

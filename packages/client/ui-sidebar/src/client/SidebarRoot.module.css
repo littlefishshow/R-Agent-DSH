@@ -282,12 +282,20 @@
 .regionArea {
   flex: 1;
   min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   margin-left: -4px;
   margin-right: calc(-1 * var(--dsh-sidebar-inline-padding));
   padding-left: 4px;
   overflow: hidden;
+}
+
+.regionBase {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .collapsed .regionArea {

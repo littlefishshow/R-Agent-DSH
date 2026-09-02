@@ -256,6 +256,26 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('renders a non-HTTP image only through an explicit owner resolver', () => {
+    const imageSources = {
+      resolve: (url: string) => url === 'diagram.png' ? 'data:image/png;base64,AQ==' : undefined,
+    }
+    const denied = render(<MarkdownText text="![local diagram](diagram.png)" />)
+    expect(denied.container.querySelector('img')).toBeNull()
+    expect(denied.getByText('local diagram')).toBeTruthy()
+    denied.unmount()
+
+    const allowed = render(
+      <MarkdownText text="![local diagram](diagram.png)" imageSources={imageSources} />,
+    )
+    expect(allowed.container.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AQ==')
+
+    const streaming = render(
+      <MarkdownText text="![local diagram](diagram.png)" streaming imageSources={imageSources} />,
+    )
+    expect(streaming.container.querySelector('img')).toBeNull()
+  })
+
   it('neutralizes raw HTML, unsafe or relative links, and unsupported images', () => {
     const markdown = [
       '<script>globalThis.compromised = true</script>',

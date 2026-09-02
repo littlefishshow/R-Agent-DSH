@@ -1,6 +1,6 @@
 /**
- * Browser trajectory plugin contributing one entry to the conversation view
- * slot without defining a service.
+ * Browser trajectory plugin contributing the conversation view and an
+ * optional embedded-presentation service over the same renderer.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
@@ -18,6 +18,20 @@ import { registerTrajectoryRequestHeaderDefinition } from './trajectory-request-
 import { registerTrajectoryConversationView } from './trajectory-snapshot-builder.ts'
 import { registerTrajectoryToolDefinition } from './trajectory-tool-definition.ts'
 import { TrajectoryView, type TrajectoryViewInjected } from './TrajectoryView.tsx'
+import {
+  createTrajectoryPresentation,
+  type ITrajectoryPresentation,
+} from './service.tsx'
+
+export type { TrajectorySnapshot } from './trajectory-contract.ts'
+export type { ITrajectoryPresentation } from './service.tsx'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Optional full-trajectory renderer for embedded Session surfaces. */
+    trajectoryPresentation: ITrajectoryPresentation
+  }
+}
 
 /** Required services: the conversation slot, registries, ordinary Session paging, and the locale service. */
 export const inject = ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale']
@@ -34,6 +48,10 @@ export function apply(ctx: Context): void {
   // re-registration.
   const t = ctx.locale.bind(NS)
   const duration = createTrajectoryDurationStore()
+  ctx.effect(
+    () => ctx.reflect.provide('trajectoryPresentation', createTrajectoryPresentation(t, duration)),
+    'ui-trajectory: embedded presentation service',
+  )
   registerTrajectoryMessageDefinitions(ctx)
   registerTrajectoryRequestHeaderDefinition(ctx)
   registerTrajectoryAssistantDefinition(ctx)

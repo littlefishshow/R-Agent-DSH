@@ -374,6 +374,18 @@ export class SessionRuntime implements ISessions {
   }
 
   /**
+   * Ensure one listed or retained session has an active history window without
+   * changing the current selection. Multi-session views use this before
+   * subscribing to a background Session; opened instances also participate in
+   * reconnect resync.
+   * @param id - session whose history and live stream projection are needed.
+   */
+  ensureOpen(id: SessionId): void {
+    const record = this.resolve(id)
+    if (record !== undefined) void record.session.open()
+  }
+
+  /**
    * Open a healthy catalog child through its direct-parent address.
    * @param address - catalog-derived parent and child ids.
    */

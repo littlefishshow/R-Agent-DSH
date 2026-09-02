@@ -277,6 +277,27 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
       }
     })
 
+    it('permanently deletes materialized data and releases the session id for reuse', async () => {
+      const { persistence, dispose } = await make()
+      try {
+        const first = meta('deleted', '/work')
+        await persistence.create(first)
+        await persistence.append(first.id, oneTurnLog())
+
+        await expect(persistence.delete(first.id)).resolves.toBe(true)
+        await expect(persistence.load(first.id)).rejects.toThrow(/not found/)
+        expect((await persistence.list()).map(header => header.id)).not.toContain(first.id)
+        await expect(persistence.delete(first.id)).resolves.toBe(false)
+
+        const replacement = { ...first, createdAt: first.createdAt + 1 }
+        await persistence.create(replacement)
+        await persistence.append(replacement.id, oneTurnLog())
+        expect((await persistence.load(replacement.id)).meta.createdAt).toBe(replacement.createdAt)
+      } finally {
+        await dispose()
+      }
+    })
+
     it('rejects pre-aborted observation reads with the exact cancellation reason', async () => {
       const { persistence, dispose } = await make()
       try {

@@ -307,6 +307,21 @@ describe('plugin registration', () => {
     ])
   })
 
+  it('provides the shared embedded renderer for the plugin lifetime', async () => {
+    const b = await bench()
+    const presentation = b.ctx.get('trajectoryPresentation')
+    expect(presentation).toBeDefined()
+    const session = b.ctx.get('sessions')?.binding(SID)?.session
+    if (session === undefined) throw new Error('fixture session missing')
+    expect(presentation?.render({
+      session,
+      loadOlder: () => Promise.resolve(false),
+    })).toBeTruthy()
+
+    await b.fiber.dispose()
+    expect(b.ctx.get('trajectoryPresentation')).toBeUndefined()
+  })
+
   it('fiber disposal removes the tab and leaves chat standing', async () => {
     const b = await bench()
     const events = b.ctx.get('conversationEvents') as ConversationEventRegistry

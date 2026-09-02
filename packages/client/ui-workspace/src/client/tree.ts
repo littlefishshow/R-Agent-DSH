@@ -30,6 +30,8 @@ export interface SessionNode {
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
   updatedAt: number
+  /** Ordinary fork lineage depth within the Workspace group. */
+  depth?: number
 }
 
 /** Session order selected by the Workspace browser. */
@@ -80,6 +82,8 @@ export interface TreeView {
   expandedGroups: readonly string[]
   /** Browser-local order for Sessions without a backing Workspace account. */
   ungroupedOrder?: readonly string[]
+  /** Project ordinary forks beneath their parent instead of as peer rows. */
+  forkLineage?: boolean
 }
 
 interface Group {
@@ -130,7 +134,7 @@ function sessionTitle(session: SessionSummary): string {
   return session.blank ? 'New Session' : session.displayTitle
 }
 
-/** Build one group without projecting session lineage into presentation. */
+/** Build one group before ordinary fork lineage is projected into presentation. */
 function buildGroup(
   key: string,
   workspaceId: WorkspaceId | undefined,
@@ -214,6 +218,7 @@ function groupByWorkspace(
 function sessionNode(
   s: SessionSummary,
   descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+  depth = 0,
 ): SessionNode {
   return {
     id: s.id,
@@ -223,12 +228,56 @@ function sessionNode(
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     updatedAt: s.updatedAt,
+    depth,
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
 }
 
 /**
- * Derive the workspace browser groups with every session as a top-level row.
+ * Keep authoritative sibling order while placing ordinary fork children
+ * immediately after their parent. Orphans and cycles remain visible at depth
+ * zero.
+ */
+function withForkLineage(sessions: readonly SessionSummary[]): { session: SessionSummary; depth: number }[] {
+  const byId = new Map(sessions.map(session => [session.id, session]))
+  const children = new Map<SessionId, SessionSummary[]>()
+  const roots: SessionSummary[] = []
+  const hasAcyclicRoot = (session: SessionSummary): boolean => {
+    const seen = new Set<SessionId>([session.id])
+    let parentId = session.parentId
+    while (parentId !== undefined) {
+      if (seen.has(parentId)) return false
+      seen.add(parentId)
+      parentId = byId.get(parentId)?.parentId
+    }
+    return true
+  }
+  for (const session of sessions) {
+    const parent = session.parentId
+    if (parent !== undefined && byId.has(parent) && hasAcyclicRoot(session)) {
+      const siblings = children.get(parent) ?? []
+      siblings.push(session)
+      children.set(parent, siblings)
+    } else {
+      roots.push(session)
+    }
+  }
+  const rows: { session: SessionSummary; depth: number }[] = []
+  const visited = new Set<SessionId>()
+  const visit = (session: SessionSummary, depth: number): void => {
+    if (visited.has(session.id)) return
+    visited.add(session.id)
+    rows.push({ session, depth })
+    for (const child of children.get(session.id) ?? []) visit(child, depth + 1)
+  }
+  for (const root of roots) visit(root, 0)
+  for (const session of sessions) visit(session, 0)
+  return rows
+}
+
+/**
+ * Derive the workspace browser groups with ordinary forks nested under their
+ * parent row.
  *
  * Every group shows; sessions populate under expanded groups in the selected
  * local order. Blank sessions are excluded except for the selected
@@ -266,24 +315,29 @@ export function deriveGroups(
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,
-      sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
+      sessions: expanded
+        ? (view.forkLineage
+          ? withForkLineage(g.sessions).map(row => sessionNode(row.session, descendants, row.depth))
+          : g.sessions.map(session => sessionNode(session, descendants)))
+        : [],
     })
   }
   return groups
 }
 
 /**
- * Derive the flat session list ("In one list" mode): every session — fork
- * children included — as a top-level row, strictly newest-first. No grouping,
- * no parent/child adjacency. Content search lives outside this derivation
- * (see {@link deriveSearchResults}).
+ * Derive the flat session list ("In one list" mode). Every visible session is
+ * sorted newest-first; an extension may retain ordinary fork lineage so child
+ * rows remain adjacent to and indented beneath their parent.
  * @param list - sessions list snapshot.
  * @param archivedSessionIds - registry-global archive set.
+ * @param forkLineage - whether ordinary fork descendants retain tree placement.
  * @returns flat rows in render order.
  */
 export function deriveFlat(
   list: SessionListState,
   archivedSessionIds: readonly SessionId[],
+  forkLineage = false,
 ): SessionNode[] {
   const archived = new Set(archivedSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
@@ -294,7 +348,8 @@ export function deriveFlat(
     rows.push(s)
   }
   rows.sort(byRecency)
-  return rows.map(session => sessionNode(session, descendants))
+  return (forkLineage ? withForkLineage(rows) : rows.map(session => ({ session, depth: 0 })))
+    .map(row => sessionNode(row.session, descendants, row.depth))
 }
 
 /** Relative-time bucket of a session row's trailing label. */

@@ -841,6 +841,29 @@ export interface Config {
 
 来源：[`packages/host/directory-picker-browse/src/index.ts:181`](../packages/host/directory-picker-browse/src/index.ts)
 
+<a id="deepseek-aidsh-host-fileworkbench-io"></a>
+
+## `@deepseek-ai/dsh-host-fileworkbench-io`
+
+需要：`connection` · `agents` · `sessions` · `sessionPersistence` · `workspaceRegistry` · `agentDefaultModel` · `agentPresets` · `sessionTitle`
+
+```ts config-catalog
+/** Validated plugin configuration. */
+export interface Config {
+  /**
+   * Browser trust the channel accepts. `loopback` (the default) serves only
+   * same-host callers; `trusted-host` additionally serves the deployment's
+   * declared LAN authorities. Arbitrary-file access is shell-sensitive, so the
+   * default stays loopback-only.
+   */
+  authority: ConnectionRpcAuthority
+}
+```
+
+依赖：[`ConnectionRpcAuthority`](../packages/client/connection/src/index.ts)
+
+来源：[`packages/host/fileworkbench-io/src/index.ts:76`](../packages/host/fileworkbench-io/src/index.ts)
+
 <a id="deepseek-aidsh-host-frontend-static"></a>
 
 ## `@deepseek-ai/dsh-host-frontend-static`
@@ -3240,10 +3263,12 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-deliverables` — 需要 `systemPrompt`（[`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse`（[`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-directory-picker-native`（[`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-file-workspace`（[`packages/client/ui-file-workspace/src/index.ts`](../packages/client/ui-file-workspace/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-goal`（[`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-input-trigger`（[`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-jobs`（[`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-layout`（[`packages/client/ui-layout/src/index.ts`](../packages/client/ui-layout/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-layout-workbench`（[`packages/client/ui-layout-workbench/src/index.ts`](../packages/client/ui-layout-workbench/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-message-feedback`（[`packages/client/ui-message-feedback/src/index.ts`](../packages/client/ui-message-feedback/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-model-selection`（[`packages/client/ui-model-selection/src/index.ts`](../packages/client/ui-model-selection/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-permission-presets`（[`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts)）
@@ -3332,6 +3357,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-web`（[`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts)）
 - `@deepseek-ai/dsh-cmdline`（[`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts)）
 - `@deepseek-ai/dsh-code-runtime-python`（[`packages/code-runtime/code-runtime-python/src/index.ts`](../packages/code-runtime/code-runtime-python/src/index.ts)）
+- `@deepseek-ai/dsh-file-workbench`（[`packages/bundle/file-workbench/src/index.ts`](../packages/bundle/file-workbench/src/index.ts)）
 - `@deepseek-ai/dsh-home-paths`（[`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts)）
 - `@deepseek-ai/dsh-hook-protocol`（[`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts)）
 - `@deepseek-ai/dsh-launch-environment`（[`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts)）

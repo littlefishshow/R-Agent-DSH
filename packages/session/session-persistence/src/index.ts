@@ -143,6 +143,16 @@ export abstract class SessionPersistence extends Service {
   abstract append(id: SessionId, events: readonly SessionEvent[]): Promise<void>
 
   /**
+   * Permanently remove one session's durable log. The session must not be live;
+   * coordinator-backed implementations serialize deletion after all prior
+   * writes and retirement for the same id, then release cached persistence
+   * state so the id may be created again.
+   * @param id - the session whose durable data is removed.
+   * @returns whether a materialized durable session existed.
+   */
+  abstract delete(id: SessionId): Promise<boolean>
+
+  /**
    * Prepare the exact unpublished Session used by resume. Implementations may
    * reuse object graphs retained by an earlier {@link inspect} after confirming
    * their durable revision is still current; disposal releases an unpublished

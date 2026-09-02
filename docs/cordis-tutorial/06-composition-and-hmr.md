@@ -6,7 +6,7 @@ Every capability built so far is a plugin, and `cordis.yml` selects the applicat
 
 ## Entries are more than a name
 
-A config entry accepts metadata beyond `name` and `config`:
+A config entry is easiest to read as one fixed position in the list: `name` says which plugin to load, `config` is passed to that plugin, and the remaining metadata tells the loader how to manage that position. The most common fields are `id` and `disabled`:
 
 ```yaml
 - id: greeter          # stable identity for this entry
@@ -16,13 +16,36 @@ A config entry accepts metadata beyond `name` and `config`:
   disabled: true       # keep the entry, skip mounting it
 ```
 
-`id` gives the entry a stable identity so the loader can tell an edit to an existing entry apart from a removal plus an addition. `disabled: true` unmounts a plugin without deleting its entry — flip it back and the plugin (and everything PENDING on its services) loads again.
+Treat `id` as the entry's stable label. When `cordis.yml` is saved, the loader first matches old and new entries by `id`; it does not start by comparing `name`. Suppose this was the original entry:
+
+```yaml
+- id: greeter
+  name: './greeter.ts'
+```
+
+If you change only the plugin implementation to `./greeter-v2.ts` and keep `id: greeter`, the loader treats it as the same entry with changed contents. Because `name` changed, the old plugin instance is unloaded and the new one starts; the entry identity is still `greeter`, so id-based lookup, disabling, or diagnosis still refers to that same entry.
+
+```yaml
+- id: greeter
+  name: './greeter-v2.ts'
+```
+
+If you change the `id` at the same time, the loader can no longer see the old `greeter` entry. It treats the old entry as deleted and `greeter-v2` as newly added. The running plugin may still end up being `./greeter-v2.ts`, but to the loader it is another entry: the old entry's state is finished, and the new id is the name to use for lookup, disabling, or diagnosis.
+
+```yaml
+- id: greeter-v2
+  name: './greeter-v2.ts'
+```
+
+Use this rule when editing config: keep the same `id` when the plugin still has the same responsibility; choose a new `id` only when it is a different entry in the composition. Explicit `id`s matter especially for HMR: an entry without one gets a generated value on every read, so after any config-file save the loader cannot prove it is the same entry as before.
+
+`disabled: true` is for temporarily turning off a plugin while keeping its place in the config file. The loader unmounts that plugin; when `disabled` becomes `false` or the field is removed, it mounts again. If other plugins were PENDING because they depended on a service it provides, those plugins load again after the service returns.
 
 Groups nest a sub-list of entries that load and unload as one unit, and `isolate` gives a group its own instance of a service name — two groups can each see a differently configured `shell` provider without affecting each other. The [Cordis primer](../cordis-primer.md) and the [service isolation example](../user/develop/framework/service.md#service-isolation) cover the details.
 
 ## Hot module replacement
 
-Because unloading releases effects ([chapter 2](02-lifecycle-and-effects.md)) and loading follows dependencies ([chapter 3](03-services.md)), HMR can replace a running plugin by unloading and loading it. The `@deepseek-ai/cordis-plugin-hmr` plugin watches your files and does exactly that on save.
+HMR (Hot Module Replacement) here means saving a file replaces the affected plugin without restarting the whole process. Cordis already knows how to unload a plugin and release its effects ([chapter 2](02-lifecycle-and-effects.md)), and how to load plugins according to service dependencies ([chapter 3](03-services.md)), so the HMR plugin supplies the coordination in between: it watches file changes, decides which plugins are affected, and triggers unload plus reload.
 
 In `tmp/cordis-tutorial`, write `cordis.yml`:
 
@@ -39,7 +62,9 @@ In `tmp/cordis-tutorial`, write `cordis.yml`:
   name: './hello.ts'
 ```
 
-Two support plugins joined the list: HMR logs through the Cordis logger service, so without a console exporter you would not see its messages, and it `inject`s the `timer` service for debouncing — without `@deepseek-ai/cordis-plugin-timer` it sits in PENDING forever, silently. That silence is the subject of the next section.
+This list has three HMR-related entries, but they do different jobs. `@deepseek-ai/cordis-plugin-hmr` is the plugin that actually performs hot reload: it watches the directory named by `root: ['.']` and triggers reload when files change.
+
+The other two plugins provide runtime capabilities HMR needs. `@deepseek-ai/cordis-plugin-logger-console` sends Cordis logs to the terminal; without it, HMR may still work, but you will not see `watching`, `reload plugin`, or failure messages. `@deepseek-ai/cordis-plugin-timer` provides `ctx.debounce()`, which HMR uses to merge several file events from one save into one reload; HMR declares a dependency on the `timer` service, so without that plugin HMR itself stays PENDING and file watching never starts. That silence is the subject of the next section.
 
 HMR reads Node's loader internals through the Loader's native helper. Run Cordis under tsx:
 

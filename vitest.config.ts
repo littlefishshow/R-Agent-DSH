@@ -209,6 +209,29 @@ export default defineConfig({
         'packages/client/ui-tool/src/*',
         'packages/client/ui-slots/src/*',
         'packages/client/ui-layout/src/*',
+        // Workbench file-workspace surfaces: the React components and their
+        // DOM-orchestration (selection capture, highlight paint, floating
+        // windows, plugin wiring) need a browser-grade harness the jsdom lane
+        // does not cover yet; the pure logic (source mapping, prompt assembly,
+        // column solver, child-session projection, IO/store) is unit-gated.
+        // TODO(gui): cover and remove as the client test lane matures.
+        'packages/client/ui-layout-workbench/src/index.ts',
+        'packages/client/ui-layout-workbench/src/invariant.ts',
+        'packages/client/ui-layout-workbench/src/client/index.ts',
+        'packages/client/ui-layout-workbench/src/client/AppFrame.tsx',
+        'packages/client/ui-layout-workbench/src/client/stores.ts',
+        'packages/client/ui-layout-workbench/src/client/service.ts',
+        'packages/client/ui-layout-workbench/src/client/theme-presenter.ts',
+        'packages/client/ui-file-workspace/src/index.ts',
+        'packages/client/ui-file-workspace/src/invariant.ts',
+        'packages/client/ui-file-workspace/src/client/index.ts',
+        'packages/client/ui-file-workspace/src/client/FileWorkspacePanel.tsx',
+        'packages/client/ui-file-workspace/src/client/FileTree.tsx',
+        'packages/client/ui-file-workspace/src/client/DocumentView.tsx',
+        'packages/client/ui-file-workspace/src/client/SubWindows.tsx',
+        'packages/client/ui-file-workspace/src/client/ModeToggle.tsx',
+        'packages/client/ui-file-workspace/src/client/highlight-paint.ts',
+        'packages/client/ui-file-workspace/src/client/stores.ts',
         'packages/client/web/src/*',
         'packages/host/webserver/src/*',
         'packages/client/modules/src/client/system.ts',

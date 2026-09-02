@@ -40,6 +40,12 @@ export interface ISessions {
    */
   open(id: SessionId): void
   /**
+   * Ensure a session's history and live event window are active without
+   * changing the current selection.
+   * @param id - listed or retained session id needed by a background view.
+   */
+  ensureOpen(id: SessionId): void
+  /**
    * Open a healthy catalog child through its exact direct-parent address.
    * @param address - catalog-derived parent and child ids.
    */

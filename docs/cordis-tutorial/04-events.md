@@ -79,7 +79,7 @@ Because `ctx.on()` is an effect, the listener disappears with the plugin — no 
 
 ## Dispatch modes
 
-`emit` is one of five dispatch modes. Which one an event uses is part of its contract — it decides whether listeners can return values, run concurrently, or short-circuit each other:
+`emit` is one of five dispatch modes. The listener does not choose the mode; the code that dispatches the event chooses it by calling `ctx.emit()`, `ctx.parallel()`, and so on. The mode decides how Cordis calls the registered listeners, whether the caller waits for them, whether return values are read, and whether one listener can stop the rest of the dispatch.
 
 | Mode | Call | Semantics |
 |---|---|---|
@@ -88,6 +88,36 @@ Because `ctx.on()` is an effect, the listener disappears with the plugin — no 
 | serial | `await ctx.serial(name, ...args)` | Listeners run in order, awaited; the first non-`null`/`false`/`undefined` return wins and stops the rest. |
 | bail | `ctx.bail(name, ...args)` | Synchronous version of serial. |
 | waterfall | `ctx.waterfall(name, ...args, next)` | Around-middleware; see below. |
+
+In plain terms, first ask what the dispatching code needs:
+
+- `emit` is “tell everyone”: notify every listener that something happened, then continue immediately. It fits logs, counters, and status broadcasts where the caller does not need a result.
+- `parallel` is “ask everyone to work at the same time, and wait until all are done”: listeners may be async, Cordis starts them concurrently, and the caller resumes after all of them settle. It fits independent async side effects.
+- `serial` is “ask in order, and use the first meaningful answer”: Cordis waits for one listener before calling the next; when a listener returns something other than `null`, `false`, or `undefined`, Cordis stops and returns that value to the caller.
+- `bail` is the synchronous version of `serial`: the stopping rule is the same, but listeners cannot line up async work with `await`.
+- `waterfall` is layered middleware: each listener decides whether to call `next()` and continue inward. The next section covers it in detail.
+
+This example shows only the difference between `emit` and `parallel`. When both listeners return promises, `emit` does not wait for them; `parallel` waits until both promises finish before continuing:
+
+```ts ignore-check
+ctx.on('demo/job', async (label) => {
+  await wait(100)
+  console.log(`${label}: slow listener`)
+})
+
+ctx.on('demo/job', async (label) => {
+  await wait(10)
+  console.log(`${label}: fast listener`)
+})
+
+ctx.emit('demo/job', 'emit')
+console.log('emit returned')
+
+await ctx.parallel('demo/job', 'parallel')
+console.log('parallel returned')
+```
+
+`emit returned` prints first because `emit` only starts the listeners; it does not wait for async results. `parallel returned` appears only after both listeners have printed. `serial` and `bail` are about finding the first meaningful answer in order, so they are more common for decision events than for ordinary broadcasts.
 
 Every harness event documents its mode in the generated reference on its owning [subsystem page](../subsystems/core.md).
 

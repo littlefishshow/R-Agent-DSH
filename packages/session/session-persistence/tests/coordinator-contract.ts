@@ -322,6 +322,27 @@ export function runCoordinatorContract(name: string, makeFixture: () => Promise<
       }
     })
 
+    it('rejects deletion while the session is live and permits it after disposal retires writes', async () => {
+      const fix = await makeFixture()
+      const { ctx, fiber } = await freshCtx(fix)
+      let session!: Session
+      const sessionFiber = await ctx.plugin(Object.assign((inner: Context) => {
+        session = inner.sessions.create(SessionId('delete-live'), { meta: { cwd: WORK } })
+      }, { inject: ['sessions'] }))
+      try {
+        send(session, oneTurnLog())
+        await expect(ctx.sessionPersistence.delete(session.id)).rejects.toThrow('while it is live')
+        await sessionFiber.dispose()
+
+        await expect(ctx.sessionPersistence.delete(session.id)).resolves.toBe(true)
+        await expect(ctx.sessionPersistence.load(session.id)).rejects.toThrow(/not found/)
+      } finally {
+        await sessionFiber.dispose()
+        await fiber.dispose()
+        await fix.cleanup()
+      }
+    })
+
     it('round-trips the seed boundary (seedLength) through persistence', async () => {
       // A forked child records how many leading events were inherited via the seed; the
       // boundary must survive a reload (so a resume/replay can tell the inherited prefix from
