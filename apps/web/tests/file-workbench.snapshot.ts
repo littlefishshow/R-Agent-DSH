@@ -21,8 +21,8 @@ it('loads the File Workbench bundle and swaps the shared Workspace projection', 
 
   fireEvent.click(files)
   await waitFor(() => {
-    expect(screen.getByText('Workspace Files')).toBeTruthy()
-    expect(screen.getByText('Choose an editable file from the file tree.')).toBeTruthy()
+    expect(screen.getAllByText('Workspaces')).toHaveLength(2)
+    expect(screen.getByText('Choose a file from the file tree.')).toBeTruthy()
   })
   expect([chat.getAttribute('aria-selected'), files.getAttribute('aria-selected')]).toMatchInlineSnapshot(`
     [

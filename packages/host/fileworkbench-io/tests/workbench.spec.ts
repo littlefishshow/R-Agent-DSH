@@ -17,16 +17,30 @@ afterEach(async () => {
 })
 
 describe('FileWorkbench.listDir', () => {
-  it('lists child directories then files, name-sorted, flagging editable files', async () => {
+  it('lists every directory and regular file with directories first', async () => {
     await writeFile(join(dir, 'notes.md'), '# n')
+    await writeFile(join(dir, 'guide.MARKDOWN'), '# g')
     await writeFile(join(dir, 'data.json'), '{}')
-    await mkdir(join(dir, 'sub'))
+    await writeFile(join(dir, 'notes.txt'), 'n')
+    await mkdir(join(dir, 'docs', 'nested'), { recursive: true })
+    await writeFile(join(dir, 'docs', 'nested', 'deep.md'), '# deep')
+    await mkdir(join(dir, 'assets'))
+    await writeFile(join(dir, 'assets', 'diagram.png'), 'image')
+    await mkdir(join(dir, 'empty'))
+
     const { entries } = await workbench.listDir(dir)
-    expect(entries.map(e => e.name)).toEqual(['sub', 'data.json', 'notes.md'])
-    expect(entries.find(e => e.name === 'sub')).toMatchObject({ kind: 'directory', editable: false })
+    expect(entries.map(e => e.name)).toEqual([
+      'assets', 'docs', 'empty', 'data.json', 'guide.MARKDOWN', 'notes.md', 'notes.txt',
+    ])
+    expect(entries.find(e => e.name === 'docs')).toMatchObject({ kind: 'directory', editable: false })
     expect(entries.find(e => e.name === 'notes.md')).toMatchObject({ kind: 'file', editable: true })
-    expect(entries.find(e => e.name === 'data.json')).toMatchObject({ kind: 'file', editable: false })
-    expect(entries[0]!.path).toBe(join(dir, 'sub'))
+    expect(entries.find(e => e.name === 'guide.MARKDOWN')).toMatchObject({ kind: 'file', editable: true })
+    expect(entries.find(e => e.name === 'data.json')).toMatchObject({ kind: 'file', editable: true })
+    expect(entries.find(e => e.name === 'diagram.png')).toBeUndefined()
+    expect(entries[0]!.path).toBe(join(dir, 'assets'))
+
+    const nested = await workbench.listDir(join(dir, 'docs'))
+    expect(nested.entries.map(e => e.name)).toEqual(['nested'])
   })
 
   it('rejects a relative path', async () => {
@@ -43,15 +57,19 @@ describe('FileWorkbench.listDir', () => {
 })
 
 describe('FileWorkbench.readText / writeText', () => {
-  it('reads an editable document with a version and rejects non-editable', async () => {
+  it('reads common source documents with a version and rejects binary formats', async () => {
     await writeFile(join(dir, 'a.md'), '# hi')
     const read = await workbench.readText(join(dir, 'a.md'))
     expect(read.content).toBe('# hi')
     expect(read.version.length).toBeGreaterThan(0)
     expect(read.fileIndex).toBe(join(dir, 'a.md'))
     expect(Number.isNaN(Date.parse(read.updatedAt))).toBe(false)
-    await writeFile(join(dir, 'a.json'), '{}')
-    await expect(workbench.readText(join(dir, 'a.json'))).rejects.toMatchObject({
+    await writeFile(join(dir, 'script.py'), 'print("hi")')
+    await expect(workbench.readText(join(dir, 'script.py'))).resolves.toMatchObject({
+      content: 'print("hi")',
+    })
+    await writeFile(join(dir, 'document.pdf'), '%PDF')
+    await expect(workbench.readText(join(dir, 'document.pdf'))).rejects.toMatchObject({
       result: { error: { code: 'workspace-invalid-path' } },
     })
   })
@@ -97,17 +115,15 @@ describe('FileWorkbench.readText / writeText', () => {
     })
   })
 
-  it('treats an extension-less name as non-editable', async () => {
+  it('reads common extension-less text files', async () => {
     await writeFile(join(dir, 'README'), 'x')
     const { entries } = await workbench.listDir(dir)
-    expect(entries.find(e => e.name === 'README')).toMatchObject({ kind: 'file', editable: false })
-    await expect(workbench.readText(join(dir, 'README'))).rejects.toMatchObject({
-      result: { error: { code: 'workspace-invalid-path' } },
-    })
+    expect(entries.find(e => e.name === 'README')).toMatchObject({ editable: true })
+    await expect(workbench.readText(join(dir, 'README'))).resolves.toMatchObject({ content: 'x' })
   })
 
-  it('refuses writing a non-editable extension', async () => {
-    await expect(workbench.writeText(join(dir, 'data.json'), '{}', undefined)).rejects.toMatchObject({
+  it('refuses writing a binary extension', async () => {
+    await expect(workbench.writeText(join(dir, 'document.pdf'), '%PDF', undefined)).rejects.toMatchObject({
       result: { error: { code: 'workspace-invalid-path' } },
     })
   })

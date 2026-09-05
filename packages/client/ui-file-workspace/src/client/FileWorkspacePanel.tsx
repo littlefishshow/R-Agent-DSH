@@ -7,9 +7,8 @@
  * for explicit human input in that window. Absolute paths throughout.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Button, IconCloseOutline16, IconFileTextOutline16,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import type { CSSProperties } from 'react'
+import { Button, IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FileWorkspacePanelProps } from './contract/slots.ts'
 import type { SelectionAction } from './stores.ts'
 import { locateMarkdownSource, expandToLines } from './markdown-source-map.ts'
@@ -20,6 +19,23 @@ import css from './FileWorkspacePanel.module.css'
 const MIN_FONT_SCALE = 0.8
 const MAX_FONT_SCALE = 1.8
 const FONT_SCALE_STEP = 0.1
+const IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp'])
+
+/** Lowercase filename extension, including the dot. */
+function extension(path: string): string {
+  const name = path.replaceAll('\\', '/').split('/').pop() ?? path
+  const at = name.lastIndexOf('.')
+  return at < 0 ? '' : name.slice(at).toLowerCase()
+}
+
+/** Renderer selected from the opened path. */
+function documentKind(path: string): 'markdown' | 'text' | 'image' | 'unsupported' {
+  const ext = extension(path)
+  if (ext === '.md' || ext === '.markdown') return 'markdown'
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image'
+  if (ext === '.pdf') return 'unsupported'
+  return 'text'
+}
 
 /** The file-workspace center panel. */
 export function FileWorkspacePanel({
@@ -34,6 +50,7 @@ export function FileWorkspacePanel({
   const documentOrder = useStore(s => s.documentOrder)
   const activeDocumentPath = useStore(s => s.activeDocumentPath)
   const document = activeDocumentPath === null ? null : documents[activeDocumentPath] ?? null
+  const kind = document === null ? null : document.previewKind ?? documentKind(document.path)
   const allHighlights = useStore(s => s.highlights)
   const nextColor = useStore(s => s.nextColor)
   const [status, setStatus] = useState<{ error?: string }>({})
@@ -46,14 +63,14 @@ export function FileWorkspacePanel({
   }, [])
 
   const save = useCallback(() => {
-    if (document === null || !document.dirty) return
+    if (document === null || kind === 'image' || kind === 'unsupported' || !document.dirty) return
     writeText(document.path, document.draft, document.version)
       .then((result) => { actions.markSaved(document.path, document.draft, result.version) })
       .catch(fail)
-  }, [actions, document, fail, writeText])
+  }, [actions, document, fail, kind, writeText])
 
   const captureSelection = useCallback((selection: CapturedSelection) => {
-    if (document === null) return
+    if (document === null || kind !== 'markdown') return
     if (pending !== null && allHighlights[pending.id] !== undefined) {
       actions.removeHighlight(pending.id)
     }
@@ -71,7 +88,7 @@ export function FileWorkspacePanel({
     })
     setPending({ ...selection, id })
     window.getSelection()?.removeAllRanges()
-  }, [actions, allHighlights, document, nextColor, pending])
+  }, [actions, allHighlights, document, kind, nextColor, pending])
 
   useEffect(() => {
     if (pending === null) return
@@ -107,6 +124,10 @@ export function FileWorkspacePanel({
       lineContext: highlight.sourceStart === highlight.sourceEnd
         ? pending.text
         : document.content.slice(highlight.sourceStart, highlight.sourceEnd),
+      visibleStart: highlight.visibleStart,
+      occurrence: highlight.occurrence,
+      sourceStart: highlight.sourceStart,
+      sourceEnd: highlight.sourceEnd,
       action,
       phase,
       x: 96,
@@ -115,6 +136,7 @@ export function FileWorkspacePanel({
       height: 620,
       fullscreen: false,
       minimized: false,
+      dockHidden: false,
       branchStartSeq: -1,
       tab: 'chat',
       zIndex: 1,
@@ -131,6 +153,12 @@ export function FileWorkspacePanel({
         ? pending.text
         : document.content.slice(highlight.sourceStart, highlight.sourceEnd),
       action,
+      selectionId: highlight.id,
+      visibleStart: highlight.visibleStart,
+      occurrence: highlight.occurrence,
+      sourceStart: highlight.sourceStart,
+      sourceEnd: highlight.sourceEnd,
+      colorIndex: highlight.colorIndex,
     }).then((branch) => { actions.attachWindowBranch(highlight.id, branch) }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       actions.setWindowPhase(highlight.id, 'cleanup-error')
@@ -163,7 +191,6 @@ export function FileWorkspacePanel({
                     title={path}
                     onClick={() => { actions.activateDocument(path) }}
                   >
-                    <IconFileTextOutline16 size={14} />
                     <span className={css.tabTitle}>{basename(path)}</span>
                     {tab.dirty && <span className={css.tabDirty}>●</span>}
                   </button>
@@ -191,44 +218,80 @@ export function FileWorkspacePanel({
                 <div className={css.docBar}>
                   <span className={css.docPath} title={document.path}>{basename(document.path)}</span>
                   {document.dirty && <span className={css.dirtyDot}>● {t('doc.dirty')}</span>}
-                  <div className={css.zoomControls} aria-label={t('doc.fontSize')}>
-                    <Button
-                      variant="ghost"
-                      disabled={fontScale <= MIN_FONT_SCALE}
-                      onClick={() => { setFontScale(value => Math.max(MIN_FONT_SCALE, value - FONT_SCALE_STEP)) }}
-                    >
-                      A−
-                    </Button>
-                    <span>{Math.round(fontScale * 100)}%</span>
-                    <Button
-                      variant="ghost"
-                      disabled={fontScale >= MAX_FONT_SCALE}
-                      onClick={() => { setFontScale(value => Math.min(MAX_FONT_SCALE, value + FONT_SCALE_STEP)) }}
-                    >
-                      A+
-                    </Button>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    onClick={() => { actions.setViewMode(document.viewMode === 'preview' ? 'edit' : 'preview') }}
-                  >
-                    {document.viewMode === 'preview' ? t('doc.edit') : t('doc.preview')}
-                  </Button>
-                  <Button variant="primary" disabled={!document.dirty} onClick={save}>{t('doc.save')}</Button>
+                  {(kind === 'markdown' || kind === 'text') && (
+                    <div className={css.zoomControls} aria-label={t('doc.fontSize')}>
+                      <Button
+                        variant="ghost"
+                        disabled={fontScale <= MIN_FONT_SCALE}
+                        onClick={() => { setFontScale(value => Math.max(MIN_FONT_SCALE, value - FONT_SCALE_STEP)) }}
+                      >
+                        A−
+                      </Button>
+                      <span>{Math.round(fontScale * 100)}%</span>
+                      <Button
+                        variant="ghost"
+                        disabled={fontScale >= MAX_FONT_SCALE}
+                        onClick={() => { setFontScale(value => Math.min(MAX_FONT_SCALE, value + FONT_SCALE_STEP)) }}
+                      >
+                        A+
+                      </Button>
+                    </div>
+                  )}
+                  {(kind === 'markdown' || kind === 'text') && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        onClick={() => { actions.setViewMode(document.viewMode === 'preview' ? 'edit' : 'preview') }}
+                      >
+                        {document.viewMode === 'preview' ? t('doc.edit') : t('doc.preview')}
+                      </Button>
+                      <Button variant="primary" disabled={!document.dirty} onClick={save}>{t('doc.save')}</Button>
+                    </>
+                  )}
                 </div>
-                <DocumentView
-                  content={document.content}
-                  path={document.path}
-                  draft={document.draft}
-                  viewMode={document.viewMode}
-                  fontScale={fontScale}
-                  highlights={documentHighlights}
-                  readImage={readImage}
-                  onDraftChange={(text) => { actions.setDraft(text) }}
-                  onSelect={captureSelection}
-                  onHighlightClick={(id) => { actions.raiseWindow(id) }}
-                  highlightLabel={t('selection.openConversation')}
-                />
+                {kind === 'markdown'
+                  ? (
+                    <DocumentView
+                      content={document.content}
+                      path={document.path}
+                      draft={document.draft}
+                      viewMode={document.viewMode}
+                      fontScale={fontScale}
+                      highlights={documentHighlights}
+                      readImage={readImage}
+                      onDraftChange={(text) => { actions.setDraft(text) }}
+                      onSelect={captureSelection}
+                      onHighlightClick={(id) => { actions.raiseWindow(id) }}
+                      highlightLabel={t('selection.openConversation')}
+                    />
+                  )
+                  : kind === 'text'
+                    ? document.viewMode === 'edit'
+                      ? (
+                        <div className={css.docContent} style={{ '--dsh-file-font-scale': fontScale } as CSSProperties}>
+                          <textarea
+                            className={css.editor}
+                            value={document.draft}
+                            spellCheck={false}
+                            onChange={(event) => { actions.setDraft(event.target.value) }}
+                          />
+                        </div>
+                      )
+                      : (
+                        <pre
+                          className={css.textPreview}
+                          style={{ '--dsh-file-font-scale': fontScale } as CSSProperties}
+                        >
+                          {document.content}
+                        </pre>
+                      )
+                    : kind === 'image'
+                      ? (
+                        <div className={css.imagePreview}>
+                          <img src={document.content} alt={basename(document.path)} />
+                        </div>
+                      )
+                      : <div className={css.unsupportedPreview}>{t('doc.unsupported')}</div>}
               </div>
             )}
         </div>

@@ -23,6 +23,50 @@ function fileContext() {
 }
 
 describe('file-workbench invariants', () => {
+  it('accepts one parent file context and rejects a second one before commit', async () => {
+    const ctx = await setup()
+    const session = ctx.sessions.create(SessionId('file-workbench-parent'))
+    session.append('turn/start', { turn: 1 })
+    session.append('user/message', fileContext(), { surfaceOp: 'append' })
+    expect(() => {
+      session.append('user/message', fileContext(), { surfaceOp: 'append' })
+    }).toThrow(expect.objectContaining<Partial<InvariantError>>({
+      code: 'INVARIANT',
+      packageName: '@deepseek-ai/dsh-host-fileworkbench-io',
+    }))
+    expect(() => {
+      session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    }).not.toThrow()
+  })
+
+  it('allows a restored parent with duplicate legacy file contexts to continue', async () => {
+    const ctx = await setup()
+    const seed = [
+      {
+        type: 'turn/start', seq: 0, time: 1, data: { turn: 1 },
+      },
+      {
+        type: 'user/message', seq: 1, time: 2, data: fileContext(), surfaceOp: 'append',
+      },
+      {
+        type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } },
+      },
+      {
+        type: 'turn/start', seq: 3, time: 4, data: { turn: 2 },
+      },
+      {
+        type: 'user/message', seq: 4, time: 5, data: fileContext(), surfaceOp: 'append',
+      },
+      {
+        type: 'turn/end', seq: 5, time: 6, data: { turn: 2, reason: { kind: 'completed' } },
+      },
+    ] as const
+
+    expect(() => {
+      ctx.sessions.create(SessionId('file-workbench-legacy-parent'), { seed })
+    }).not.toThrow()
+  })
+
   it('requires every selection child to name a file parent', async () => {
     const ctx = await setup()
     expect(() => {

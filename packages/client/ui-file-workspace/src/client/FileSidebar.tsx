@@ -1,11 +1,26 @@
 /** Files-mode projection of the shared Workspace list as filesystem trees. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, IconProjectAddOutline16, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconProjectAddOutline16, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FileSidebarProps } from './contract/slots.ts'
 import type { FileWorkbenchEntry } from './protocol.ts'
 import { FileTree, type FileTreeAction, type FileTreeApi } from './FileTree.tsx'
 import { isSameOrDescendant, parentDir } from './path.ts'
 import css from './FileSidebar.module.css'
+
+const IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp'])
+
+/** Lowercase filename extension, including the dot. */
+function extension(path: string): string {
+  const name = path.replaceAll('\\', '/').split('/').pop() ?? path
+  const at = name.lastIndexOf('.')
+  return at < 0 ? '' : name.slice(at).toLowerCase()
+}
+
+/** Whether a path is rendered through the Markdown reader. */
+function isMarkdown(path: string): boolean {
+  const ext = extension(path)
+  return ext === '.md' || ext === '.markdown'
+}
 
 /** Render shared Workspaces as filesystem roots while Files mode is active. */
 export function FileSidebar({
@@ -17,6 +32,7 @@ export function FileSidebar({
   actions,
   listDir,
   readText,
+  readImage,
   createEntry,
   deleteEntry,
   copyEntry,
@@ -66,7 +82,8 @@ export function FileSidebar({
     }
   }, [actions, entriesByPath, loadDir, mode, workspaces])
 
-  const openFile = useCallback((path: string) => {
+  const openFile = useCallback((entry: FileWorkbenchEntry) => {
+    const { path } = entry
     if (documents[path] !== undefined) {
       actions.activateDocument(path)
       return
@@ -78,19 +95,55 @@ export function FileSidebar({
       fail(new Error(`No Workspace owns ${path}`))
       return
     }
+    const kind = isMarkdown(path)
+      ? 'markdown' as const
+      : IMAGE_EXTENSIONS.has(extension(path))
+        ? 'image' as const
+        : entry.editable ? 'text' as const : 'unsupported' as const
+    if (kind === 'unsupported') {
+      actions.openDocument({
+        path,
+        content: '',
+        version: '',
+        workspaceId: workspace.workspaceId,
+        previewKind: kind,
+        draft: '',
+        dirty: false,
+        viewMode: 'preview',
+      })
+      setError(undefined)
+      return
+    }
+    if (kind === 'image') {
+      readImage(path).then((next) => {
+        actions.openDocument({
+          path: next.path,
+          content: next.dataUrl,
+          version: '',
+          workspaceId: workspace.workspaceId,
+          previewKind: kind,
+          draft: next.dataUrl,
+          dirty: false,
+          viewMode: 'preview',
+        })
+        setError(undefined)
+      }).catch(fail)
+      return
+    }
     readText(path).then((next) => {
       actions.openDocument({
         path: next.path,
         content: next.content,
         version: next.version,
         workspaceId: workspace.workspaceId,
+        previewKind: kind,
         draft: next.content,
         dirty: false,
         viewMode: 'preview',
       })
       setError(undefined)
     }).catch(fail)
-  }, [actions, documents, fail, readText, workspaces])
+  }, [actions, documents, fail, readImage, readText, workspaces])
 
   const onAction = useCallback((action: FileTreeAction, entry: FileWorkbenchEntry) => {
     const refresh = (path: string): void => {
@@ -172,8 +225,9 @@ export function FileSidebar({
       <div className={css.header}>
         <span>{t('panel.title')}</span>
         <Tooltip label={t('panel.addFolder')} side="bottom" delayMs={500}>
-          <Button
-            variant="ghost"
+          <button
+            type="button"
+            className={css.addButton}
             disabled={adding}
             aria-label={t('panel.addFolder')}
             onClick={() => {
@@ -191,8 +245,7 @@ export function FileSidebar({
             }}
           >
             <IconProjectAddOutline16 size={wide ? 16 : 18} />
-            {wide && t('panel.addFolder')}
-          </Button>
+          </button>
         </Tooltip>
       </div>
       {error !== undefined && <div className={css.error}>{t('panel.error')}{error}</div>}

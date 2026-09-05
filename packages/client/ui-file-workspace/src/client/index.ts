@@ -18,8 +18,9 @@
  * The panel and overlay share one apply-constructed view store (root scope).
  */
 import type {
-  ClientContext, SessionId, SessionRuntime,
+  ClientContext, SessionId, SessionRuntime, SessionSummary,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { IWorkbenchLayout } from '@deepseek-ai/dsh-client-ui-layout-workbench/client'
 import type { IWorkspacePresentation } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -38,7 +39,11 @@ import { FileSidebar } from './FileSidebar.tsx'
 import { SubWindows } from './SubWindows.tsx'
 import { ModeToggle } from './ModeToggle.tsx'
 import { en, NS, zh } from './locales.ts'
-import type { FileWorkspaceInjected } from './contract/slots.ts'
+import type {
+  FileWorkspaceInjected, RestorableSelectionsSnapshot,
+} from './contract/slots.ts'
+import type { FileWorkbenchSelectionProjection } from './protocol.ts'
+import type { RestorableSelection } from './stores.ts'
 
 export type { ChildSessionView } from './contract/slots.ts'
 
@@ -47,6 +52,34 @@ export const inject = [
   'slots', 'sessions', 'workspaces', 'connection', 'workbenchLayout', 'workspacePresentation',
   'trajectoryPresentation', 'locale',
 ]
+
+/** Read a File Workbench selection projection from one Session-list row. */
+function restorableSelection(summary: SessionSummary): RestorableSelection | undefined {
+  const projection: FileWorkbenchSelectionProjection | null | undefined
+    = summary.projectionValues?.fileWorkbenchSelection
+  return projection === undefined || projection === null
+    ? undefined
+    : { ...projection, sessionId: summary.id }
+}
+
+/**
+ * Project the Session-list baseline into live File Workbench child metadata.
+ * @param snapshot - current Session-list snapshot.
+ * @returns list lifecycle plus every child carrying restoration metadata.
+ */
+export function restorableSelections(
+  snapshot: ReturnType<SessionRuntime['list']['getSnapshot']>,
+): RestorableSelectionsSnapshot {
+  return {
+    phase: snapshot.phase,
+    items: snapshot.ids.flatMap((id) => {
+      const summary = snapshot.byId[id]
+      if (summary === undefined) return []
+      const selection = restorableSelection(summary)
+      return selection === undefined ? [] : [selection]
+    }),
+  }
+}
 
 /**
  * Client plugin body: build the shared store and IO caller, assemble the
@@ -69,13 +102,22 @@ export function apply(ctx: ClientContext): void {
   // ISessions face omits host-refresh control used after plugin RPC mutations.
   const sessions = ctx.sessions as SessionRuntime
   const childViews = new ChildSessionViews(sessions)
+  const restoredSelections = createSnapshotStore(restorableSelections(sessions.list.getSnapshot()))
+  ctx.effect(() => {
+    const project = (): void => { restoredSelections.set(restorableSelections(sessions.list.getSnapshot())) }
+    return sessions.list.subscribe(project)
+  }, 'ui-file-workspace: durable selection projection')
 
   // One shared handle under the panel and overlay (both root scope), so the
   // renderer supplies one framework-owned instance to both entries.
   const store = createFileWorkspaceStore()
 
   const injected: FileWorkspaceInjected = {
-    hooks: { childViews: childViews.store, mode: workbenchLayout.mode },
+    hooks: {
+      childViews: childViews.store,
+      mode: workbenchLayout.mode,
+      restorableSelections: restoredSelections,
+    },
     listDir: async path => (await io.listDir(path)).entries,
     readText: path => io.readText(path),
     readImage: path => io.readImage(path),
@@ -95,6 +137,12 @@ export function apply(ctx: ClientContext): void {
         selectedText: input.selectedText,
         lineContext: input.lineContext,
         action: input.action,
+        selectionId: input.selectionId,
+        visibleStart: input.visibleStart,
+        occurrence: input.occurrence,
+        sourceStart: input.sourceStart,
+        sourceEnd: input.sourceEnd,
+        colorIndex: input.colorIndex,
         ...input.instruction === undefined ? {} : { instruction: input.instruction },
       })
       await sessions.refresh().catch(() => {})

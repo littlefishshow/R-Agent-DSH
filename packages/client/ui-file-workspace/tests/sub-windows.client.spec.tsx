@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Floating selection-window lifecycle and durable child projection tests. */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore, type SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
@@ -51,6 +51,10 @@ function fixture(options: {
     selectedText,
     title: action === 'modify' ? 'Make it clearer.' : 'What does this mean?',
     lineContext: selectedText,
+    visibleStart: 0,
+    occurrence: 0,
+    sourceStart: 0,
+    sourceEnd: selectedText.length,
     action,
     phase: 'ready',
     x: 80,
@@ -59,6 +63,7 @@ function fixture(options: {
     height: 620,
     fullscreen: false,
     minimized: false,
+    dockHidden: false,
     branchStartSeq: 10,
     tab: 'chat',
     zIndex: 2,
@@ -80,6 +85,11 @@ function fixture(options: {
       ],
     },
   })
+  const mode = createSnapshotStore<'chat' | 'files'>('files')
+  const restorableSelections = createSnapshotStore({
+    phase: 'ready' as const,
+    items: [],
+  })
   const renderChildTrajectory = vi.fn(() =>
     <div data-testid="native-trajectory">native trajectory</div>)
   const deleteSelectionSession = vi.fn(async () => {
@@ -90,6 +100,8 @@ function fixture(options: {
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     useChildViews: bindSnapshotSelector(childViews),
+    useMode: bindSnapshotSelector(mode),
+    useRestorableSelections: bindSnapshotSelector(restorableSelections),
     listDir: vi.fn(),
     readText: vi.fn(),
     readImage: vi.fn(),
@@ -103,7 +115,7 @@ function fixture(options: {
     removeWorkspace: vi.fn(),
     startSelectionSession: vi.fn(),
     deleteSelectionSession,
-    sendFollowUp: vi.fn(),
+    sendFollowUp: vi.fn(async () => {}),
     stopChildSession: vi.fn(),
     watchChildSession,
     renderChildTrajectory,
@@ -144,6 +156,21 @@ describe('SubWindows', () => {
     expect(store.getSnapshot().highlights.selection).toBeDefined()
     expect(screen.getByRole('button', { name: 'What does this mean?' })).toBeTruthy()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Hide minimized conversation' }))
+    expect(store.getSnapshot().windows.selection).toMatchObject({
+      minimized: true,
+      dockHidden: true,
+    })
+    expect(store.getSnapshot().highlights.selection).toBeDefined()
+    expect(props.deleteSelectionSession).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'What does this mean?' })).toBeNull()
+
+    act(() => { store.actions.raiseWindow('selection') })
+    expect(store.getSnapshot().windows.selection).toMatchObject({
+      minimized: false,
+      dockHidden: false,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
     fireEvent.click(screen.getByRole('button', { name: 'What does this mean?' }))
     expect(store.getSnapshot().windows.selection?.minimized).toBe(false)
     expect(screen.getByText('branch answer')).toBeTruthy()
@@ -153,7 +180,6 @@ describe('SubWindows', () => {
     const { store, props, release, deleteSelectionSession } = fixture()
     render(<SubWindows {...props} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
     expect(release).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
@@ -236,5 +262,33 @@ describe('SubWindows', () => {
     render(<SubWindows {...props} />)
 
     expect(document.querySelector('.katex annotation')?.textContent).toBe('x^2 + y^2')
+  })
+
+  it('does not send Enter while an IME composition is active or settling', () => {
+    vi.useFakeTimers()
+    try {
+      const { props } = fixture()
+      render(<SubWindows {...props} />)
+      const input = screen.getByRole('textbox')
+      fireEvent.change(input, { target: { value: 'pinyin' } })
+
+      fireEvent.compositionStart(input)
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(props.sendFollowUp).not.toHaveBeenCalled()
+
+      fireEvent.compositionEnd(input)
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(props.sendFollowUp).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(20)
+      fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
+      expect(props.sendFollowUp).not.toHaveBeenCalled()
+
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(props.sendFollowUp).toHaveBeenCalledWith(CHILD_ID, 'pinyin')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

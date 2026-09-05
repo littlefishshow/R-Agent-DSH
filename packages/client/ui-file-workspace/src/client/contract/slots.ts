@@ -28,8 +28,10 @@ import type {
 import type {} from '@deepseek-ai/dsh-client-ui-layout-workbench/client'
 import type { WorkbenchMode } from '@deepseek-ai/dsh-client-ui-layout-workbench/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type { EntryResponse, FileWorkbenchEntry, ReadTextResponse, WriteTextResponse } from '../protocol.ts'
-import type { SelectionAction } from '../stores.ts'
+import type {
+  EntryResponse, FileWorkbenchEntry, ReadTextResponse, WriteTextResponse,
+} from '../protocol.ts'
+import type { RestorableSelection, SelectionAction } from '../stores.ts'
 import type { createFileWorkspaceStore } from '../stores.ts'
 import type { ChildSessionViewsSnapshot } from '../child-session-views.ts'
 
@@ -47,6 +49,14 @@ export interface ChildSessionView {
   running: boolean
 }
 
+/** Session-list lifecycle plus every currently restorable selection child. */
+export interface RestorableSelectionsSnapshot {
+  /** The list must be ready before an absent child can be treated as deleted. */
+  phase: 'pending' | 'ready'
+  /** Current children carrying File Workbench selection metadata. */
+  items: readonly RestorableSelection[]
+}
+
 /** File and folder actions the panel and its sub-windows drive (arrives via the register inject factory). */
 export interface FileWorkspaceInjected {
   hooks: {
@@ -54,8 +64,10 @@ export interface FileWorkspaceInjected {
     childViews: HostObservable<ChildSessionViewsSnapshot>
     /** Current center mode; directory trees load only while Files is active. */
     mode: HostObservable<WorkbenchMode>
+    /** Live durable selection children used to rebuild highlights after reload. */
+    restorableSelections: HostObservable<RestorableSelectionsSnapshot>
   }
-  /** List one absolute directory level (child directories and files). */
+  /** List one absolute directory level. */
   listDir: (path: string) => Promise<FileWorkbenchEntry[]>
   /** Read one document. */
   readText: (path: string) => Promise<ReadTextResponse>
@@ -86,6 +98,12 @@ export interface FileWorkspaceInjected {
     lineContext: string
     action: SelectionAction
     instruction?: string
+    selectionId: string
+    visibleStart: number
+    occurrence: number
+    sourceStart: number
+    sourceEnd: number
+    colorIndex: number
   }) => Promise<{ sessionId: SessionId; branchStartSeq: number; title: string }>
   /** Permanently remove one selection child and its durable context. */
   deleteSelectionSession: (input: {

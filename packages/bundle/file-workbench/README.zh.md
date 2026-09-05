@@ -36,11 +36,11 @@ pnpm dsh --profile web
 - [`@deepseek-ai/dsh-host-fileworkbench-io`](../../host/fileworkbench-io/README.zh.md) —— 一条默认仅回环的宿主通道，在操作者选择的绝对路径上列出目录和文件、读写文本与受支持的 Markdown 图片，并创建、删除、复制、重命名条目。
 - [`@deepseek-ai/dsh-session-persistence`](../../session/session-persistence/README.zh.md) 与默认 [`JSONL provider`](../../session/session-persistence-jsonl/README.zh.md) —— 携带永久删除非活动 Session 能力的兼容 persistence API 与 provider。
 - [`@deepseek-ai/dsh-client-ui-layout-workbench`](../../client/ui-layout-workbench/README.zh.md) —— 一个中栏模式切换的三列外壳；patch 禁用基座 `ui-layout` 使其占据 `root`，但原生会话在对话模式下保持挂载。
-- [`@deepseek-ai/dsh-client-ui-file-workspace`](../../client/ui-file-workspace/README.zh.md) —— 侧栏模式切换、共享 Workspace 文件系统投影、带文件操作的懒加载文件树、Markdown 编辑器与选区子窗口。
+- [`@deepseek-ai/dsh-client-ui-file-workspace`](../../client/ui-file-workspace/README.zh.md) —— 侧栏模式切换、共享 Workspace 文件系统投影、带文件操作的懒加载完整文件树、Markdown 编辑器与选区子窗口、源码文本预览及光栅图片预览。
 - [`@deepseek-ai/dsh-client-ui-sidebar`](../../client/ui-sidebar/README.zh.md) —— 携带 Workspace 覆盖 seat 与新会话前置通知的兼容侧栏外壳版本。
 - [`@deepseek-ai/dsh-client-runtime`](../../client/runtime/README.zh.md)、[`@deepseek-ai/dsh-client-ui-workspace`](../../client/ui-workspace/README.zh.md)、`@deepseek-ai/dsh-client-ui-trajectory` 与 `@deepseek-ai/dsh-client-ui-primitives` —— 本功能所消费的后台 Session 窗口、分组 fork 投影、原生轨迹快照与显式 Markdown 图片解析器的兼容版本。
 
-在浏览器中，对话模式显示现有 Workspace/会话投影，文件模式把同一组 Workspace 路径显示为文件系统树。使用**添加工作区**打开宿主原生目录选择器，并把所选路径注册到共享 Workspace 列表；移除根目录只注销 Workspace，不删除对应目录。树内操作是真实文件系统操作。懒加载展开目录，创建/删除/复制/粘贴/重命名条目，并在阅读器中打开可编辑的 Markdown/文本文件。阅读器支持 80%–180% 字号缩放，并解析受支持的相对本地图片。选中文本会立即高亮，并提供**提问**、**修改**、**解释**或**概括**；选择动作前点击其他区域会移除临时高亮。提问和修改等待操作者输入具体要求，解释和概括立即开始。宿主会在对应 Workspace 下为每个文件维护一个稳定父 Session，并把每段选区放在其下；每个 child 独占一条字节稳定的文件上下文，而问题彼此独立。浮窗可调整大小、通过 portal 覆盖完整视口并停靠；最小化保留高亮，点击该高亮会恢复对应窗口，关闭或采纳修改则永久删除选区 Session 并移除高亮。文件模式点击「新会话」会先切回对话，再执行普通新会话动作。
+在浏览器中，对话模式显示现有 Workspace/会话投影，文件模式把同一组 Workspace 路径显示为与对话侧栏对齐的完整懒加载文件树。使用**添加工作区**打开宿主原生目录选择器，并把所选路径注册到共享 Workspace 列表；移除根目录只注销 Workspace，不删除对应目录。树内操作是真实文件系统操作。目录可懒加载展开，条目支持创建、删除、复制、粘贴和重命名，并在只显示文件名的标签页中打开。Markdown 使用富文本阅读/编辑器和选区动作；包括 Python 在内的常见 UTF-8 源码使用等宽阅读/编辑器；PNG、JPEG、WebP 和 GIF 使用自适应图片预览；PDF 与其他不支持的二进制文件仍可见，但显示明确的不支持预览面板。宿主会在对应 Workspace 下为每个文件维护一个稳定的 `[File] <工作区内相对路径>` 父 Session，并把每段选区放在其下；每个 child 独占一条字节稳定的文件上下文，而问题彼此独立。插件启动会恢复早期版本归档的 File Workbench root 与 child。浮窗可调整大小、通过 portal 覆盖完整视口并停靠；最小化保留高亮，点击该高亮会恢复对应窗口，关闭或采纳修改则永久删除选区 Session 并移除高亮。文件模式点击「新会话」会先切回对话，再执行普通新会话动作。
 
 ## 加载顺序与覆盖
 

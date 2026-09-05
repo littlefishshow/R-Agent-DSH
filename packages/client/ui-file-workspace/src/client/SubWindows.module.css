@@ -67,7 +67,7 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
 }
 
-.dockClose {
+.dockHide {
   align-self: stretch;
   display: inline-flex;
   align-items: center;
@@ -79,7 +79,7 @@
   cursor: pointer;
 }
 
-.dockClose:hover {
+.dockHide:hover {
   color: var(--dsw-alias-text-1);
   background: var(--dsw-alias-fill-hover);
 }

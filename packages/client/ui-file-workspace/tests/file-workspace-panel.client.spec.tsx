@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Markdown reader controls and local-image integration tests. */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore, type SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
@@ -16,6 +16,158 @@ afterEach(() => {
 })
 
 describe('FileWorkspacePanel', () => {
+  it('previews source text, images, and unsupported binary files without Markdown rendering', () => {
+    const store = createFileWorkspaceStore().create()
+    const props = {
+      useStore: bindSnapshotSelector(store),
+      actions: store.actions,
+      writeText: vi.fn(),
+      readImage: vi.fn(),
+      startSelectionSession: vi.fn(),
+      t: (key: keyof typeof en) => en[key],
+      useSessions: vi.fn(),
+      useWorkspaces: vi.fn(),
+    } as unknown as FileWorkspacePanelProps
+    const view = render(<FileWorkspacePanel {...props} />)
+
+    act(() => {
+      store.actions.openDocument({
+        path: '/workspace/script.py',
+        content: 'print("hello")',
+        version: 'v1',
+        workspaceId: 'workspace',
+        previewKind: 'text',
+        draft: 'print("hello")',
+        dirty: false,
+        viewMode: 'preview',
+      })
+    })
+    expect(screen.getByText('print("hello")')).toBeTruthy()
+
+    act(() => {
+      store.actions.openDocument({
+        path: '/workspace/diagram.png',
+        content: 'data:image/png;base64,AQ==',
+        version: '',
+        workspaceId: 'workspace',
+        previewKind: 'image',
+        draft: 'data:image/png;base64,AQ==',
+        dirty: false,
+        viewMode: 'preview',
+      })
+    })
+    expect(screen.getByRole('img', { name: 'diagram.png' }).getAttribute('src'))
+      .toBe('data:image/png;base64,AQ==')
+
+    act(() => {
+      store.actions.openDocument({
+        path: '/workspace/paper.pdf',
+        content: '',
+        version: '',
+        workspaceId: 'workspace',
+        previewKind: 'unsupported',
+        draft: '',
+        dirty: false,
+        viewMode: 'preview',
+      })
+    })
+    expect(screen.getByText('Preview is not available for this file type.')).toBeTruthy()
+    view.unmount()
+  })
+
+  it('restores a durable highlight after reload and opens its minimized child window', async () => {
+    const store = createFileWorkspaceStore().create()
+    const mode = createSnapshotStore<'chat' | 'files'>('files')
+    const restorableSelections = createSnapshotStore({
+      phase: 'ready' as const,
+      items: [{
+        id: 'restored',
+        sessionId: 'child-session' as SessionId,
+        workspaceId: 'workspace',
+        path: '/workspace/readme.md',
+        fileVersion: 'v1',
+        selectedText: 'Persistent selection',
+        lineContext: '# Persistent selection',
+        action: 'explain' as const,
+        visibleStart: 0,
+        occurrence: 0,
+        sourceStart: 0,
+        sourceEnd: 22,
+        colorIndex: 2,
+        title: 'Explain · Persistent selection',
+        branchStartSeq: -1,
+      }],
+    })
+    const childViews = createSnapshotStore({
+      'child-session': {
+        messages: [{ role: 'assistant' as const, text: 'restored answer', seq: 3 }],
+        running: false,
+      },
+    })
+    const readText = vi.fn(async () => ({
+      path: '/workspace/readme.md',
+      content: '# Persistent selection',
+      version: 'v1',
+      fileIndex: '/workspace/readme.md',
+      updatedAt: '2026-09-02T00:00:00.000Z',
+    }))
+    const originalRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects')
+    const originalBoundingRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect')
+    Range.prototype.getClientRects = () => [{
+      bottom: 30, height: 20, left: 10, right: 160, top: 10, width: 150, x: 10, y: 10,
+      toJSON: () => ({}),
+    }] as unknown as DOMRectList
+    HTMLElement.prototype.getBoundingClientRect = () => ({
+      bottom: 300, height: 300, left: 0, right: 600, top: 0, width: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    })
+    const props = {
+      useStore: bindSnapshotSelector(store),
+      actions: store.actions,
+      writeText: vi.fn(),
+      readText,
+      readImage: vi.fn(),
+      startSelectionSession: vi.fn(),
+      t: (key: keyof typeof en) => en[key],
+      useSessions: vi.fn(),
+      useWorkspaces: vi.fn(),
+    } as unknown as FileWorkspacePanelProps
+    try {
+      render(
+        <>
+          <FileWorkspacePanel {...props} />
+          <SubWindows
+            {...props}
+            useChildViews={bindSnapshotSelector(childViews)}
+            useMode={bindSnapshotSelector(mode)}
+            useRestorableSelections={bindSnapshotSelector(restorableSelections)}
+            sendFollowUp={vi.fn()}
+            stopChildSession={vi.fn()}
+            deleteSelectionSession={vi.fn()}
+            watchChildSession={vi.fn(() => vi.fn())}
+          />
+        </>,
+      )
+
+      await waitFor(() => {
+        expect(readText).toHaveBeenCalledWith('/workspace/readme.md')
+        expect(store.getSnapshot().windows.restored).toMatchObject({ minimized: true })
+      })
+      const highlight = await screen.findByRole('button', { name: 'Open linked selection conversation' })
+      fireEvent.click(highlight)
+      expect(store.getSnapshot().windows.restored).toMatchObject({ minimized: false })
+      expect(screen.getByText('restored answer')).toBeTruthy()
+    } finally {
+      if (originalRects === undefined) delete (Range.prototype as { getClientRects?: unknown }).getClientRects
+      else Object.defineProperty(Range.prototype, 'getClientRects', originalRects)
+      if (originalBoundingRect === undefined) {
+        delete (HTMLElement.prototype as { getBoundingClientRect?: unknown }).getBoundingClientRect
+      } else {
+        Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', originalBoundingRect)
+      }
+    }
+  })
+
   it('keeps multiple open documents as selectable, closable tabs', () => {
     const store = createFileWorkspaceStore().create()
     store.actions.openDocument({
@@ -50,6 +202,8 @@ describe('FileWorkspacePanel', () => {
     render(<FileWorkspacePanel {...props} />)
 
     expect(screen.getByRole('tablist', { name: 'Open files' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'one.md' }).querySelector('svg')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'two.md' }).querySelector('svg')).toBeNull()
     expect(screen.getByRole('heading', { name: 'Two' })).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'one.md' }))
     expect(screen.getByRole('heading', { name: 'One' })).toBeTruthy()
@@ -92,6 +246,11 @@ describe('FileWorkspacePanel', () => {
         <SubWindows
           {...props}
           useChildViews={bindSnapshotSelector(childViews)}
+          useMode={bindSnapshotSelector(createSnapshotStore<'chat' | 'files'>('files'))}
+          useRestorableSelections={bindSnapshotSelector(createSnapshotStore({
+            phase: 'ready' as const,
+            items: [],
+          }))}
           sendFollowUp={vi.fn()}
           stopChildSession={vi.fn()}
           deleteSelectionSession={vi.fn()}
@@ -129,7 +288,7 @@ describe('FileWorkspacePanel', () => {
       dirty: false,
       viewMode: 'preview',
     })
-    const startSelectionSession = vi.fn(async () => ({
+    const startSelectionSession = vi.fn(async (_input: Parameters<FileWorkspacePanelProps['startSelectionSession']>[0]) => ({
       sessionId: 'child-session' as SessionId,
       branchStartSeq: 4,
       title: instruction,
@@ -150,6 +309,11 @@ describe('FileWorkspacePanel', () => {
         <SubWindows
           {...props}
           useChildViews={bindSnapshotSelector(createSnapshotStore({}))}
+          useMode={bindSnapshotSelector(createSnapshotStore<'chat' | 'files'>('files'))}
+          useRestorableSelections={bindSnapshotSelector(createSnapshotStore({
+            phase: 'ready' as const,
+            items: [],
+          }))}
           sendFollowUp={vi.fn()}
           stopChildSession={vi.fn()}
           deleteSelectionSession={vi.fn()}
@@ -182,7 +346,7 @@ describe('FileWorkspacePanel', () => {
     fireEvent.change(screen.getByPlaceholderText(placeholder), { target: { value: instruction } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(screen.getByText('Creating branch…')).toBeTruthy()
-    expect(startSelectionSession).toHaveBeenCalledWith({
+    expect(startSelectionSession).toHaveBeenCalledWith(expect.objectContaining({
       workspaceId: 'workspace',
       path: '/workspace/readme.md',
       fileVersion: 'v1',
@@ -190,7 +354,13 @@ describe('FileWorkspacePanel', () => {
       lineContext: '# Selected paragraph',
       action,
       instruction,
-    })
+      visibleStart: 0,
+      occurrence: 0,
+      sourceStart: 0,
+      sourceEnd: 20,
+      colorIndex: 0,
+    }))
+    expect(startSelectionSession.mock.calls[0]?.[0].selectionId).toMatch(/^sel-/)
     await waitFor(() => {
       expect(Object.values(store.getSnapshot().windows)[0]).toMatchObject({
         sessionId: 'child-session',
@@ -229,6 +399,11 @@ describe('FileWorkspacePanel', () => {
         <SubWindows
           {...props}
           useChildViews={bindSnapshotSelector(createSnapshotStore({}))}
+          useMode={bindSnapshotSelector(createSnapshotStore<'chat' | 'files'>('files'))}
+          useRestorableSelections={bindSnapshotSelector(createSnapshotStore({
+            phase: 'ready' as const,
+            items: [],
+          }))}
           sendFollowUp={vi.fn()}
           stopChildSession={vi.fn()}
           deleteSelectionSession={vi.fn()}
@@ -272,7 +447,7 @@ describe('FileWorkspacePanel', () => {
       dirty: false,
       viewMode: 'preview',
     })
-    const startSelectionSession = vi.fn(async () => ({
+    const startSelectionSession = vi.fn(async (_input: Parameters<FileWorkspacePanelProps['startSelectionSession']>[0]) => ({
       sessionId: 'child-session' as SessionId,
       branchStartSeq: 4,
       title: 'Explain · Selected paragraph',
@@ -302,14 +477,20 @@ describe('FileWorkspacePanel', () => {
     fireEvent.mouseUp(heading)
     fireEvent.click(screen.getByRole('button', { name: 'Explain' }))
 
-    expect(startSelectionSession).toHaveBeenCalledWith({
+    expect(startSelectionSession).toHaveBeenCalledWith(expect.objectContaining({
       workspaceId: 'workspace',
       path: '/workspace/readme.md',
       fileVersion: 'v1',
       selectedText: 'Selected paragraph',
       lineContext: '# Selected paragraph',
       action: 'explain',
-    })
+      visibleStart: 0,
+      occurrence: 0,
+      sourceStart: 0,
+      sourceEnd: 20,
+      colorIndex: 0,
+    }))
+    expect(startSelectionSession.mock.calls[0]?.[0].selectionId).toMatch(/^sel-/)
   })
 
   it('uses the reader text rather than a divergent native selection string', async () => {
@@ -344,6 +525,11 @@ describe('FileWorkspacePanel', () => {
         <SubWindows
           {...props}
           useChildViews={bindSnapshotSelector(createSnapshotStore({}))}
+          useMode={bindSnapshotSelector(createSnapshotStore<'chat' | 'files'>('files'))}
+          useRestorableSelections={bindSnapshotSelector(createSnapshotStore({
+            phase: 'ready' as const,
+            items: [],
+          }))}
           sendFollowUp={vi.fn()}
           stopChildSession={vi.fn()}
           deleteSelectionSession={vi.fn()}
@@ -461,6 +647,10 @@ describe('FileWorkspacePanel', () => {
       selectedText: 'Persistent selection',
       title: 'Why does this persist?',
       lineContext: '# Persistent selection',
+      visibleStart: 0,
+      occurrence: 0,
+      sourceStart: 2,
+      sourceEnd: 22,
       action: 'ask',
       phase: 'ready',
       x: 96,
@@ -469,6 +659,7 @@ describe('FileWorkspacePanel', () => {
       height: 620,
       fullscreen: false,
       minimized: true,
+      dockHidden: true,
       branchStartSeq: 2,
       tab: 'chat',
       zIndex: 1,
@@ -499,7 +690,10 @@ describe('FileWorkspacePanel', () => {
     try {
       render(<FileWorkspacePanel {...props} />)
       fireEvent.click(screen.getByRole('button', { name: 'Open linked selection conversation' }))
-      expect(store.getSnapshot().windows.selection?.minimized).toBe(false)
+      expect(store.getSnapshot().windows.selection).toMatchObject({
+        minimized: false,
+        dockHidden: false,
+      })
     } finally {
       if (originalRects === undefined) delete (Range.prototype as { getClientRects?: unknown }).getClientRects
       else Object.defineProperty(Range.prototype, 'getClientRects', originalRects)

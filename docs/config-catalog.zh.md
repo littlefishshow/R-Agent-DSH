@@ -862,7 +862,7 @@ export interface Config {
 
 依赖：[`ConnectionRpcAuthority`](../packages/client/connection/src/index.ts)
 
-来源：[`packages/host/fileworkbench-io/src/index.ts:76`](../packages/host/fileworkbench-io/src/index.ts)
+来源：[`packages/host/fileworkbench-io/src/index.ts:79`](../packages/host/fileworkbench-io/src/index.ts)
 
 <a id="deepseek-aidsh-host-frontend-static"></a>
 

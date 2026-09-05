@@ -860,7 +860,7 @@ export interface Config {
 
 Depends on: [`ConnectionRpcAuthority`](../packages/client/connection/src/index.ts)
 
-Source: [`packages/host/fileworkbench-io/src/index.ts:76`](../packages/host/fileworkbench-io/src/index.ts)
+Source: [`packages/host/fileworkbench-io/src/index.ts:96`](../packages/host/fileworkbench-io/src/index.ts)
 
 <a id="deepseek-aidsh-host-frontend-static"></a>
 

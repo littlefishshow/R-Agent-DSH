@@ -1,10 +1,8 @@
 /**
- * The lazy, multi-folder file tree. Each added folder is a root; expanding a
- * directory lazily lists its children through the store's `entriesByPath` cache
- * (filled by the panel). Files open on click; a per-row action menu offers the
- * file operations (new file/folder, rename, delete, copy, paste). Directories
- * come first, then files; non-editable files are shown but open read-only-ish
- * (the editor refuses them).
+ * The lazy, multi-folder file tree. Each added Workspace is a root;
+ * expanding a directory lazily lists its direct children through the store's
+ * `entriesByPath` cache. Files open on click; a per-row action menu offers the
+ * file operations (new file/folder, rename, delete, copy, paste).
  */
 import { useState } from 'react'
 import clsx from 'clsx'
@@ -25,8 +23,8 @@ export interface FileTreeApi {
   isExpanded: (path: string) => boolean
   /** Toggle a directory's expansion (loads children on first expand). */
   toggleDir: (path: string) => void
-  /** Open a file in the editor. */
-  openFile: (path: string) => void
+  /** Open a file in the appropriate preview. */
+  openFile: (entry: FileWorkbenchEntry) => void
   /** The absolute path of the open document, for active highlighting. */
   activePath: string | undefined
   /** Run a file operation menu action on an entry (or a folder root). */
@@ -61,7 +59,7 @@ function TreeNode(props: {
 }) {
   const { entry, depth, root, api, labels } = props
   const [menuOpen, setMenuOpen] = useState(false)
-  const indent = { paddingLeft: `${8 + depth * 14}px` }
+  const indent = { paddingLeft: `${8 + depth * 18}px` }
   const expanded = entry.kind === 'directory' && api.isExpanded(entry.path)
   const containsActive = api.activePath !== undefined && isSameOrDescendant(api.activePath, entry.path)
   const selected = entry.kind === 'file' && entry.path === api.activePath
@@ -91,7 +89,7 @@ function TreeNode(props: {
   return (
     <>
       <div
-        className={css.treeRow}
+        className={clsx(css.treeRow, entry.kind === 'directory' ? css.treeDirectoryRow : css.treeFileRow)}
         style={indent}
         data-active={selected || undefined}
         data-menu-open={menuOpen || undefined}
@@ -99,10 +97,9 @@ function TreeNode(props: {
         <button
           type="button"
           className={clsx(css.treeLabel, entry.kind === 'directory' && css.treeDir)}
-          disabled={entry.kind === 'file' && !entry.editable}
           onClick={() => {
             if (entry.kind === 'directory') api.toggleDir(entry.path)
-            else if (entry.editable) api.openFile(entry.path)
+            else api.openFile(entry)
           }}
         >
           {entry.kind === 'directory'

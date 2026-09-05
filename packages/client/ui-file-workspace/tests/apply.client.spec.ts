@@ -11,7 +11,16 @@ import {
 } from '@deepseek-ai/dsh-client-ui-layout-workbench/client'
 import type { ITrajectoryPresentation } from '@deepseek-ai/dsh-client-ui-trajectory/client'
 import type { FileWorkspaceInjected } from '../src/client/contract/slots.ts'
-import { apply, inject } from '../src/client/index.ts'
+import { apply, inject, restorableSelections } from '../src/client/index.ts'
+
+const selectionLocation = {
+  selectionId: 'selection',
+  visibleStart: 0,
+  occurrence: 0,
+  sourceStart: 0,
+  sourceEnd: 8,
+  colorIndex: 0,
+} as const
 
 /** Mount the plugin over the slots and services it consumes. */
 async function bench(options: {
@@ -164,6 +173,7 @@ describe('ui-file-workspace apply', () => {
       selectedText: 'selected',
       lineContext: 'selected',
       action: 'explain',
+      ...selectionLocation,
     })
 
     expect(branch).toEqual({
@@ -181,6 +191,7 @@ describe('ui-file-workspace apply', () => {
         selectedText: 'selected',
         lineContext: 'selected',
         action: 'explain',
+        ...selectionLocation,
       },
       undefined,
     )
@@ -197,6 +208,7 @@ describe('ui-file-workspace apply', () => {
       lineContext: 'selected',
       action: 'ask',
       instruction: 'What does this mean?',
+      ...selectionLocation,
     })
 
     expect(b.rpcCall).toHaveBeenCalledWith(
@@ -208,6 +220,47 @@ describe('ui-file-workspace apply', () => {
       }),
       undefined,
     )
+  })
+
+  it('projects durable selection children from the ready Session list', () => {
+    const projection = {
+      id: 'selection',
+      workspaceId: 'workspace',
+      path: '/workspace/README.md',
+      fileVersion: 'v1',
+      selectedText: 'selected',
+      lineContext: 'selected',
+      action: 'explain' as const,
+      visibleStart: 0,
+      occurrence: 0,
+      sourceStart: 0,
+      sourceEnd: 8,
+      colorIndex: 0,
+      title: 'Explain · selected',
+      branchStartSeq: -1,
+    }
+    const childId = 'child' as SessionId
+    expect(restorableSelections({
+      ids: [childId],
+      byId: {
+        [childId]: {
+          id: childId,
+          displayTitle: projection.title,
+          running: false,
+          blank: false,
+          updatedAt: 1,
+          projectionValues: { fileWorkbenchSelection: projection },
+        },
+      },
+      current: undefined,
+      phase: 'ready',
+      subagentsByParent: {},
+      jobsBySession: {},
+      currentAddress: undefined,
+    })).toEqual({
+      phase: 'ready',
+      items: [{ ...projection, sessionId: 'child' }],
+    })
   })
 
   it('deletes a selection child through the Host and refreshes session projections', async () => {

@@ -12,7 +12,8 @@ import type {
   ConnectionRpcHandler, ConnectionRpcHandlerOptions, HostConnectionHandle,
 } from '@deepseek-ai/dsh-client-connection'
 import {
-  apply, Config, FileWorkbench, FILE_WORKBENCH_CHANNEL, inject, orderSelectionMessages,
+  apply, Config, FileWorkbench, fileSessionId, fileSessionTitle, FILE_WORKBENCH_CHANNEL, inject,
+  orderSelectionMessages,
 } from '../src/index.ts'
 
 let dir: string
@@ -21,11 +22,25 @@ let handler: ConnectionRpcHandler
 let options: ConnectionRpcHandlerOptions
 let channel: string
 const createdAgents = new Map<string, AgentHandle>()
+const createAgentCalls = vi.fn()
+const resumeAgent = vi.fn()
 const attachSession = vi.fn<(id: SessionId) => Promise<void>>(async () => {})
 const detachSession = vi.fn<(id: SessionId) => Promise<void>>(async () => {})
 const deleteSession = vi.fn<(id: SessionId) => Promise<boolean>>(async () => true)
+const unarchiveSession = vi.fn<(id: SessionId) => Promise<void>>(async () => {})
+const getSessionTitle = vi.fn()
 const renameSession = vi.fn()
 const signal = new AbortController().signal
+const archivedRoot = SessionId('file-workbench-v2-archived')
+const archivedChild = SessionId('file-selection-archived')
+const selectionLocation = {
+  selectionId: 'selection',
+  visibleStart: 0,
+  occurrence: 0,
+  sourceStart: 0,
+  sourceEnd: 16,
+  colorIndex: 0,
+} as const
 
 /** A fake ctx.connection capturing the single registered channel handler. */
 function fakeConnection(): HostConnectionHandle {
@@ -39,10 +54,14 @@ function fakeConnection(): HostConnectionHandle {
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'dsh-workbench-apply-'))
+  createAgentCalls.mockClear()
+  resumeAgent.mockReset()
+  unarchiveSession.mockClear()
   ctx = new Context()
   await ctx.plugin(SessionStore)
   ctx.provide('connection', fakeConnection())
   const createAgent = async (input: CreateAgentOptions): Promise<AgentHandle> => {
+    createAgentCalls(input)
     const session = ctx.sessions.prepare(input.sessionId, {
       ...(input.seed === undefined ? {} : { seed: input.seed }),
       ...(input.meta === undefined ? {} : { meta: input.meta }),
@@ -100,7 +119,7 @@ beforeEach(async () => {
   ctx.provide('agents', {
     get: (id: string) => createdAgents.get(id)?.agent,
     create: createAgent,
-    resume: vi.fn(),
+    resume: resumeAgent,
   } as never)
   ctx.provide('sessionPersistence', {
     list: async () => [],
@@ -108,6 +127,8 @@ beforeEach(async () => {
     delete: deleteSession,
   } as never)
   ctx.provide('workspaceRegistry', {
+    archivedSessionIds: [archivedRoot, SessionId('file-selection-archived'), SessionId('ordinary-archived')],
+    unarchiveSession,
     get: (id: string) => id === 'workspace'
       ? { id, path: dir, attachSession, detachSession }
       : undefined,
@@ -120,12 +141,13 @@ beforeEach(async () => {
     mount: vi.fn(async () => ({ id: 'standard' })),
     composeFrom: vi.fn(() => 'standard'),
   } as never)
-  ctx.provide('sessionTitle', { rename: renameSession } as never)
+  ctx.provide('sessionTitle', { get: getSessionTitle, rename: renameSession } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply, Config }, { authority: 'loopback' })
   await fiber.await()
   attachSession.mockClear()
   detachSession.mockClear()
   deleteSession.mockClear()
+  getSessionTitle.mockClear()
   renameSession.mockClear()
 })
 afterEach(async () => {
@@ -136,6 +158,16 @@ afterEach(async () => {
 })
 
 describe('fileworkbench-io apply', () => {
+  it('unarchives historical file roots and selection children when the plugin starts', () => {
+    expect(unarchiveSession).toHaveBeenCalledWith(archivedRoot)
+    expect(unarchiveSession).toHaveBeenCalledWith(archivedChild)
+    expect(unarchiveSession).not.toHaveBeenCalledWith('ordinary-archived')
+  })
+
+  it('labels file-parent sessions with their Workspace-relative path', () => {
+    expect(fileSessionTitle(dir, join(dir, 'nested', 'guide.md'))).toBe('[File] nested/guide.md')
+  })
+
   it('registers the file-workbench channel loopback-only by default', () => {
     expect(channel).toBe(FILE_WORKBENCH_CHANNEL)
     expect(options.authority).toBe('loopback')
@@ -158,7 +190,7 @@ describe('fileworkbench-io apply', () => {
 
     const list = await handler('listDir', { path: dir }, signal) as RpcResult<{ entries: unknown[] }>
     if (!list.ok) throw new Error('expected list to succeed')
-    expect(list.value.entries.length).toBe(2)
+    expect(list.value.entries).toHaveLength(2)
 
     const rename = await handler('renameEntry', { path: join(dir, 'a.md'), newName: 'b.md' }, signal)
     expect(rename).toMatchObject({ ok: true })
@@ -188,6 +220,7 @@ describe('fileworkbench-io apply', () => {
       selectedText: 'Shared context',
       lineContext: '# Shared context',
       action: 'explain',
+      ...selectionLocation,
     }, signal) as RpcResult<{
       fileSessionId: string
       sessionId: string
@@ -201,6 +234,7 @@ describe('fileworkbench-io apply', () => {
       selectedText: 'Shared',
       lineContext: '# Shared context',
       action: 'summarize',
+      ...selectionLocation,
     }, signal) as RpcResult<{
       fileSessionId: string
       sessionId: string
@@ -216,12 +250,12 @@ describe('fileworkbench-io apply', () => {
     })
     const parent = createdAgents.get(first.value.fileSessionId)?.agent.session
     if (parent === undefined) throw new Error('expected file parent')
-    expect(parent.events.filter(event => event.type === 'turn/start')).toHaveLength(1)
-    expect(parent.events.filter(event => event.type === 'user/message')).toHaveLength(0)
-    await Promise.all([
-      createdAgents.get(first.value.sessionId)?.agent.whenIdle(),
-      createdAgents.get(second.value.sessionId)?.agent.whenIdle(),
-    ])
+    expect(renameSession).toHaveBeenCalledWith(parent, '[File] context.md')
+    expect(unarchiveSession).toHaveBeenCalledWith(first.value.fileSessionId)
+    expect(parent.events.filter(event => event.type === 'turn/start').map(event => event.data.turn))
+      .toEqual([1])
+    expect(parent.events.filter(event => event.type === 'turn/end').map(event => event.data.turn))
+      .toEqual([1])
     const expectedContext = [
       '<file_context>',
       `file_index: ${path}`,
@@ -232,6 +266,32 @@ describe('fileworkbench-io apply', () => {
       '</content>',
       '</file_context>',
     ].join('\n')
+    const parentContexts = parent.events.filter(event =>
+      event.type === 'user/message'
+      && event.data.source.kind === 'plugin'
+      && event.data.source.plugin === 'host-fileworkbench-io')
+    expect(parentContexts).toHaveLength(1)
+    const parentBlock = parentContexts[0]?.type === 'user/message'
+      ? parentContexts[0].data.content[0]
+      : undefined
+    expect(parentBlock).toEqual({ type: 'text', text: expectedContext })
+    expect(parent.deriveMessages().filter(message =>
+      message.role === 'user'
+      && message.source.kind === 'plugin'
+      && message.source.plugin === 'host-fileworkbench-io')).toHaveLength(1)
+    const parentHandle = createdAgents.get(first.value.fileSessionId)
+    if (parentHandle === undefined) throw new Error('expected file-parent Agent')
+    parentHandle.agent.followup(createUserMessage({
+      content: [{ type: 'text', text: 'root question' }],
+      source: { kind: 'user' },
+    }))
+    await parentHandle.agent.whenIdle()
+    expect(parent.events.filter(event => event.type === 'turn/start').map(event => event.data.turn))
+      .toEqual([1, 2])
+    await Promise.all([
+      createdAgents.get(first.value.sessionId)?.agent.whenIdle(),
+      createdAgents.get(second.value.sessionId)?.agent.whenIdle(),
+    ])
     for (const childId of [first.value.sessionId, second.value.sessionId]) {
       const child = createdAgents.get(childId)?.agent.session
       if (child === undefined) throw new Error('expected selection child')
@@ -250,6 +310,41 @@ describe('fileworkbench-io apply', () => {
     expect(readText).toHaveBeenCalledOnce()
   })
 
+  it('reuses a live file parent opened by another host path', async () => {
+    const path = join(dir, 'live-root.md')
+    await writeFile(path, '# Live root')
+    const read = await handler('readText', { path }, signal) as RpcResult<{
+      version: string
+    }>
+    if (!read.ok) throw new Error('expected read to succeed')
+    const rootId = fileSessionId('workspace', path)
+    const existing = await ctx.agents.create({
+      sessionId: rootId,
+      meta: { cwd: dir, agentPreset: 'standard' },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    createAgentCalls.mockClear()
+
+    const started = await handler('startSelectionSession', {
+      workspaceId: 'workspace',
+      path,
+      expectedVersion: read.value.version,
+      selectedText: 'Live root',
+      lineContext: '# Live root',
+      action: 'explain',
+      ...selectionLocation,
+    }, signal) as RpcResult<{ fileSessionId: string; sessionId: string }>
+
+    expect(started).toMatchObject({ ok: true, value: { fileSessionId: rootId } })
+    expect(ctx.agents.get(rootId)).toBe(existing.agent)
+    expect(resumeAgent).not.toHaveBeenCalled()
+    expect(createAgentCalls).toHaveBeenCalledOnce()
+    expect(existing.agent.session.deriveMessages().filter(message =>
+      message.role === 'user'
+      && message.source.kind === 'plugin'
+      && message.source.plugin === 'host-fileworkbench-io')).toHaveLength(1)
+  })
+
   it('uses the first instruction as the child title and requires one fenced modify result', async () => {
     const path = join(dir, 'modify.md')
     await writeFile(path, '# Original')
@@ -264,6 +359,7 @@ describe('fileworkbench-io apply', () => {
       lineContext: '# Original',
       action: 'modify',
       instruction: 'Make the heading more specific',
+      ...selectionLocation,
     }, signal) as RpcResult<{ sessionId: string; title: string }>
     if (!started.ok) throw new Error('expected modify selection to start')
 
@@ -278,10 +374,18 @@ describe('fileworkbench-io apply', () => {
     if (prompt?.type !== 'user/message') throw new Error('expected opening prompt')
     const block = prompt.data.content[0]
     if (block?.type !== 'text') throw new Error('expected text opening prompt')
-    expect(prompt.data.source).toEqual({
+    expect(prompt.data.source).toMatchObject({
       kind: 'plugin',
       plugin: 'host-fileworkbench-io:selection-prompt',
       form: 'instructions',
+      fileWorkbenchSelection: {
+        id: 'selection',
+        workspaceId: 'workspace',
+        path,
+        selectedText: 'Original',
+        action: 'modify',
+        title: 'Make the heading more specific',
+      },
     })
     expect(block.text).toContain('回复中必须有且仅有一个 Markdown 代码块')
     expect(block.text).toContain('优先使用四反引号')
@@ -480,6 +584,7 @@ describe('fileworkbench-io apply', () => {
       selectedText: 'first',
       lineContext: 'first',
       action: 'explain',
+      ...selectionLocation,
     }, signal)).toMatchObject({
       ok: false,
       error: { code: 'workspace-invalid-path' },
@@ -498,6 +603,7 @@ describe('fileworkbench-io apply', () => {
       selectedText: 'Delete',
       lineContext: '# Delete',
       action: 'explain',
+      ...selectionLocation,
     }, signal) as RpcResult<{ sessionId: string }>
     if (!started.ok) throw new Error('expected selection to start')
 
@@ -523,6 +629,7 @@ describe('fileworkbench-io apply', () => {
       selectedText: 'Recreate',
       lineContext: '# Recreate',
       action: 'explain',
+      ...selectionLocation,
     }
     const first = await handler('startSelectionSession', request, signal) as RpcResult<{
       fileSessionId: string
@@ -548,8 +655,12 @@ describe('fileworkbench-io apply', () => {
     const parent = createdAgents.get(second.value.fileSessionId)?.agent.session
     const child = createdAgents.get(second.value.sessionId)?.agent.session
     if (parent === undefined || child === undefined) throw new Error('expected parent and recreated child')
-    expect(parent.events.filter(event => event.type === 'turn/start').map(event => event.data.turn)).toEqual([1])
-    expect(parent.events.filter(event => event.type === 'user/message')).toHaveLength(0)
+    expect(parent.events.filter(event => event.type === 'turn/start').map(event => event.data.turn))
+      .toEqual([1])
+    expect(parent.events.filter(event =>
+      event.type === 'user/message'
+      && event.data.source.kind === 'plugin'
+      && event.data.source.plugin === 'host-fileworkbench-io')).toHaveLength(1)
     expect(child.events.filter(event => event.type === 'turn/start').map(event => event.data.turn))
       .toEqual([1])
     expect(new Set(

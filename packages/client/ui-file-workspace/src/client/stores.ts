@@ -9,7 +9,7 @@
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { FileWorkbenchEntry } from './protocol.ts'
+import type { FileWorkbenchEntry, FileWorkbenchSelectionProjection } from './protocol.ts'
 import { isSameOrDescendant, rewritePathPrefix } from './path.ts'
 
 /** The selection action a sub-window carries out over the selected text. */
@@ -54,6 +54,14 @@ export interface SubWindowRecord {
   title: string
   /** Source lines surrounding the selection. */
   lineContext: string
+  /** Start offset in the rendered readable-text projection. */
+  visibleStart: number
+  /** Selected occurrence of the readable text, zero-based. */
+  occurrence: number
+  /** Start offset of the line-aligned Markdown source range. */
+  sourceStart: number
+  /** End offset of the line-aligned Markdown source range. */
+  sourceEnd: number
   /** The action this window performs. */
   action: SelectionAction
   /** Whether the window awaits first input, creates its child, or has one. */
@@ -67,6 +75,8 @@ export interface SubWindowRecord {
   fullscreen: boolean
   /** True while collapsed to the dock; the highlight stays painted. */
   minimized: boolean
+  /** True when the minimized dock entry is hidden; the highlight remains the restore affordance. */
+  dockHidden: boolean
   /** Last inherited event seq; the compact window renders only later branch-local messages. */
   branchStartSeq: number
   /** Which tab the window shows. */
@@ -87,12 +97,20 @@ export interface OpenDocument {
   version: string
   /** Shared Workspace that owns the file parent and selection child Sessions. */
   workspaceId: string
+  /** Explicit renderer for non-text files; text documents infer from their path when absent. */
+  previewKind?: 'markdown' | 'text' | 'image' | 'unsupported'
   /** The in-editor draft when editing; equals content when clean. */
   draft: string
   /** Whether the draft differs from the saved content. */
   dirty: boolean
   /** Preview (rendered Markdown) or edit (source textarea). */
   viewMode: 'preview' | 'edit'
+}
+
+/** One live child Session plus the durable metadata needed to restore its UI. */
+export interface RestorableSelection extends FileWorkbenchSelectionProjection {
+  /** Child Session carrying this projection. */
+  sessionId: SessionId
 }
 
 /** File-workspace view state (all serializable; live sessions resolve elsewhere). */
@@ -111,6 +129,8 @@ interface FileWorkspaceState {
   highlights: Record<string, HighlightRecord>
   /** Sub-windows by id. */
   windows: Record<string, SubWindowRecord>
+  /** Selection ids backed by a durable child projection. */
+  durableSelectionIds: Record<string, true>
   /** The next z-index to assign when a window is raised. */
   topZ: number
   /** The next hue index to assign to a new selection. */
@@ -131,6 +151,9 @@ type FileWorkspaceActions = {
   setViewMode: (draft: FileWorkspaceState, mode: 'preview' | 'edit') => void
   markSaved: (draft: FileWorkspaceState, path: string, content: string, version: string) => void
   addHighlight: (draft: FileWorkspaceState, highlight: HighlightRecord) => void
+  restoreDocument: (draft: FileWorkspaceState, doc: OpenDocument) => void
+  restoreSelection: (draft: FileWorkspaceState, selection: RestorableSelection) => void
+  reconcileRestorableSelections: (draft: FileWorkspaceState, sessionIds: string[]) => void
   openSelectionWindow: (draft: FileWorkspaceState, window: SubWindowRecord) => void
   attachWindowBranch: (
     draft: FileWorkspaceState,
@@ -146,6 +169,7 @@ type FileWorkspaceActions = {
   setWindowFullscreen: (draft: FileWorkspaceState, id: string, fullscreen: boolean) => void
   setWindowTab: (draft: FileWorkspaceState, id: string, tab: 'chat' | 'trajectory') => void
   minimizeWindow: (draft: FileWorkspaceState, id: string, minimized: boolean) => void
+  hideWindowDock: (draft: FileWorkspaceState, id: string) => void
   raiseWindow: (draft: FileWorkspaceState, id: string) => void
   removeSelection: (draft: FileWorkspaceState, id: string) => void
   removeHighlight: (draft: FileWorkspaceState, id: string) => void
@@ -165,6 +189,7 @@ export function createFileWorkspaceStore(): EngineStoreHandle<FileWorkspaceState
       activeDocumentPath: null,
       highlights: {},
       windows: {},
+      durableSelectionIds: {},
       topZ: 1,
       nextColor: 0,
     }),
@@ -243,6 +268,82 @@ export function createFileWorkspaceStore(): EngineStoreHandle<FileWorkspaceState
         d.highlights[highlight.id] = highlight
         d.nextColor += 1
       },
+      restoreDocument: (d, doc) => {
+        if (d.documents[doc.path] !== undefined) return
+        d.documents[doc.path] = doc
+        d.documentOrder.push(doc.path)
+        d.activeDocumentPath ??= doc.path
+      },
+      restoreSelection: (d, selection) => {
+        d.durableSelectionIds[selection.id] = true
+        d.highlights[selection.id] ??= {
+          id: selection.id,
+          path: selection.path,
+          text: selection.selectedText,
+          visibleStart: selection.visibleStart,
+          occurrence: selection.occurrence,
+          sourceStart: selection.sourceStart,
+          sourceEnd: selection.sourceEnd,
+          colorIndex: selection.colorIndex,
+        }
+        const current = d.windows[selection.id]
+        if (current === undefined) {
+          d.windows[selection.id] = {
+            id: selection.id,
+            sessionId: selection.sessionId,
+            path: selection.path,
+            workspaceId: selection.workspaceId,
+            fileVersion: selection.fileVersion,
+            selectedText: selection.selectedText,
+            title: selection.title,
+            lineContext: selection.lineContext,
+            visibleStart: selection.visibleStart,
+            occurrence: selection.occurrence,
+            sourceStart: selection.sourceStart,
+            sourceEnd: selection.sourceEnd,
+            action: selection.action,
+            phase: 'ready',
+            x: 96,
+            y: 96,
+            width: 560,
+            height: 620,
+            fullscreen: false,
+            minimized: true,
+            dockHidden: false,
+            branchStartSeq: selection.branchStartSeq,
+            tab: 'chat',
+            zIndex: d.topZ + 1,
+            colorIndex: selection.colorIndex,
+          }
+        } else {
+          current.sessionId = selection.sessionId
+          current.fileVersion = selection.fileVersion
+          current.title = selection.title
+          current.branchStartSeq = selection.branchStartSeq
+          current.phase = 'ready'
+          delete current.error
+        }
+        d.topZ = Math.max(d.topZ, d.windows[selection.id]?.zIndex ?? d.topZ)
+        d.nextColor = Math.max(d.nextColor, selection.colorIndex + 1)
+      },
+      reconcileRestorableSelections: (d, sessionIds) => {
+        const retained = new Set(sessionIds)
+        const removed = Object.keys(d.durableSelectionIds).filter((id) => {
+          const sessionId = d.windows[id]?.sessionId
+          return sessionId === undefined || !retained.has(sessionId)
+        })
+        if (removed.length === 0) return
+        const removedSet = new Set(removed)
+        d.durableSelectionIds = Object.fromEntries(
+          Object.entries(d.durableSelectionIds).filter(([id]) => !removedSet.has(id)),
+        )
+        d.highlights = Object.fromEntries(
+          Object.entries(d.highlights).filter(([id]) => !removedSet.has(id)),
+        )
+        d.windows = Object.fromEntries(
+          Object.entries(d.windows).filter(([id]) => !removedSet.has(id)),
+        )
+      },
       openSelectionWindow: (d, window) => {
         d.windows[window.id] = { ...window, zIndex: d.topZ + 1 }
         d.topZ += 1
@@ -254,6 +355,7 @@ export function createFileWorkspaceStore(): EngineStoreHandle<FileWorkspaceState
         window.branchStartSeq = branch.branchStartSeq
         window.title = branch.title
         window.phase = 'ready'
+        d.durableSelectionIds[id] = true
         delete window.error
       },
       setWindowError: (d, id, error) => {
@@ -285,6 +387,7 @@ export function createFileWorkspaceStore(): EngineStoreHandle<FileWorkspaceState
         if (window === undefined) return
         window.fullscreen = fullscreen
         window.minimized = false
+        window.dockHidden = false
       },
       setWindowTab: (d, id, tab) => {
         const window = d.windows[id]
@@ -294,8 +397,13 @@ export function createFileWorkspaceStore(): EngineStoreHandle<FileWorkspaceState
         const window = d.windows[id]
         if (window !== undefined) {
           window.minimized = minimized
+          window.dockHidden = false
           if (minimized) window.fullscreen = false
         }
+      },
+      hideWindowDock: (d, id) => {
+        const window = d.windows[id]
+        if (window !== undefined && window.minimized) window.dockHidden = true
       },
       raiseWindow: (d, id) => {
         const window = d.windows[id]
@@ -303,14 +411,18 @@ export function createFileWorkspaceStore(): EngineStoreHandle<FileWorkspaceState
         d.topZ += 1
         window.zIndex = d.topZ
         window.minimized = false
+        window.dockHidden = false
       },
       removeSelection: (d, id) => {
         const { [id]: h, ...highlights } = d.highlights
         void h
         const { [id]: w, ...windows } = d.windows
         void w
+        const { [id]: durable, ...durableSelectionIds } = d.durableSelectionIds
+        void durable
         d.highlights = highlights
         d.windows = windows
+        d.durableSelectionIds = durableSelectionIds
       },
       removeHighlight: (d, id) => {
         const { [id]: removed, ...highlights } = d.highlights

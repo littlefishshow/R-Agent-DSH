@@ -20,6 +20,15 @@ function fakeRpc(result: { ok: true; value: unknown } | { ok: false; error: { me
 }
 
 describe('createFileWorkbenchIo', () => {
+  const selectionLocation = {
+    selectionId: 'selection',
+    visibleStart: 0,
+    occurrence: 0,
+    sourceStart: 0,
+    sourceEnd: 1,
+    colorIndex: 0,
+  } as const
+
   it('lists a directory on the file-workbench channel', async () => {
     const { rpc, calls } = fakeRpc({ ok: true, value: { path: '/abs', entries: [] } })
     const io = createFileWorkbenchIo(rpc)
@@ -62,6 +71,7 @@ describe('createFileWorkbenchIo', () => {
       lineContext: '# a',
       action: 'ask',
       instruction: 'Why?',
+      ...selectionLocation,
     })
     expect(selection.calls[0]).toEqual({
       channel: FILE_WORKBENCH_CHANNEL,
@@ -74,6 +84,7 @@ describe('createFileWorkbenchIo', () => {
         lineContext: '# a',
         action: 'ask',
         instruction: 'Why?',
+        ...selectionLocation,
       },
     })
 

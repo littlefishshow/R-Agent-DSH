@@ -32,6 +32,7 @@ export type FileWorkspaceKey =
   | 'doc.saving'
   | 'doc.saved'
   | 'doc.dirty'
+  | 'doc.unsupported'
   | 'selection.modify'
   | 'selection.ask'
   | 'selection.explain'
@@ -48,6 +49,7 @@ export type FileWorkspaceKey =
   | 'window.restore'
   | 'window.resize'
   | 'window.close'
+  | 'window.hideDock'
   | 'window.accept'
   | 'window.invalidReplacement'
   | 'window.sourceChanged'
@@ -72,7 +74,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const zh: Record<FileWorkspaceKey, string> = {
   'mode.chat': '对话',
   'mode.files': '文件',
-  'panel.title': '工作区文件',
+  'panel.title': '工作区',
   'panel.empty': '尚未添加工作区。点击「添加工作区」选择一个目录。',
   'panel.addFolder': '添加工作区',
   'panel.removeFolder': '移除工作区',
@@ -87,7 +89,7 @@ export const zh: Record<FileWorkspaceKey, string> = {
   'tree.deleteConfirm': '确定删除「{name}」？此操作不可撤销。',
   'tree.namePrompt': '名称：',
   'doc.edit': '编辑',
-  'doc.empty': '请从左侧文件树选择一个可编辑文件。',
+  'doc.empty': '请从左侧文件树选择一个文件。',
   'doc.openFiles': '已打开文件',
   'doc.close': '关闭 {name}',
   'doc.closeDirty': '“{name}”有未保存修改。仍要关闭吗？',
@@ -97,6 +99,7 @@ export const zh: Record<FileWorkspaceKey, string> = {
   'doc.saving': '保存中…',
   'doc.saved': '已保存',
   'doc.dirty': '未保存',
+  'doc.unsupported': '当前文件类型暂不支持预览。',
   'selection.modify': '修改',
   'selection.ask': '提问',
   'selection.explain': '解释',
@@ -113,6 +116,7 @@ export const zh: Record<FileWorkspaceKey, string> = {
   'window.restore': '还原',
   'window.resize': '调整窗口大小',
   'window.close': '关闭',
+  'window.hideDock': '隐藏底部标签',
   'window.accept': '采纳修改',
   'window.invalidReplacement': '无法采纳：回复中必须包含且仅包含一个 markdown 代码块。',
   'window.sourceChanged': '无法采纳：原文件中的待替换文本已经变化，请重新选择。',
@@ -131,7 +135,7 @@ export const zh: Record<FileWorkspaceKey, string> = {
 export const en: Record<FileWorkspaceKey, string> = {
   'mode.chat': 'Chat',
   'mode.files': 'Files',
-  'panel.title': 'Workspace Files',
+  'panel.title': 'Workspaces',
   'panel.empty': 'No Workspaces yet. Click “Add workspace” to choose a directory.',
   'panel.addFolder': 'Add workspace',
   'panel.removeFolder': 'Remove workspace',
@@ -146,7 +150,7 @@ export const en: Record<FileWorkspaceKey, string> = {
   'tree.deleteConfirm': 'Delete “{name}”? This cannot be undone.',
   'tree.namePrompt': 'Name:',
   'doc.edit': 'Edit',
-  'doc.empty': 'Choose an editable file from the file tree.',
+  'doc.empty': 'Choose a file from the file tree.',
   'doc.openFiles': 'Open files',
   'doc.close': 'Close {name}',
   'doc.closeDirty': '“{name}” has unsaved changes. Close it anyway?',
@@ -156,6 +160,7 @@ export const en: Record<FileWorkspaceKey, string> = {
   'doc.saving': 'Saving…',
   'doc.saved': 'Saved',
   'doc.dirty': 'Unsaved',
+  'doc.unsupported': 'Preview is not available for this file type.',
   'selection.modify': 'Modify',
   'selection.ask': 'Ask',
   'selection.explain': 'Explain',
@@ -172,6 +177,7 @@ export const en: Record<FileWorkspaceKey, string> = {
   'window.restore': 'Restore',
   'window.resize': 'Resize window',
   'window.close': 'Close',
+  'window.hideDock': 'Hide minimized conversation',
   'window.accept': 'Accept change',
   'window.invalidReplacement': 'Cannot accept: the reply must contain exactly one markdown code block.',
   'window.sourceChanged': 'Cannot accept: the source text to replace has changed. Select it again.',

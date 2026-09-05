@@ -404,7 +404,14 @@ export class Session implements SessionFace {
       /* v8 ignore next -- the ?? arm needs older[0] undefined, but the empty-page branch above already returned. */
       this.baseSeq = older[0]?.event.seq ?? this.baseSeq
       this.hasMore = result.value.hasMore
-      this.conversation.prepend(older.map(conversationInput), this.hasMore)
+      const repaired = repairRepeatedEmptyTurnBoundaries(
+        this.events.map((event, index) => ({ event, view: this.views[index] })),
+      )
+      if (repaired.length === this.events.length) {
+        this.conversation.prepend(older.map(conversationInput), this.hasMore)
+      } else {
+        this.conversation.replaceWindow(repaired, this.hasMore)
+      }
     } catch (error) {
       console.error('[web-runtime] loadOlder failed:', error)
     } finally {
@@ -660,7 +667,10 @@ export class Session implements SessionFace {
     this.baseSeq = this.events[0]?.seq ?? 0
     this.hasMore = hasMore
     if (this.events.some(event => event.type === 'turn/start')) this.firstPromptPendingTurn = false
-    this.conversation.replaceWindow(entries.map(conversationInput), hasMore)
+    this.conversation.replaceWindow(
+      repairRepeatedEmptyTurnBoundaries(entries.map(conversationInput)),
+      hasMore,
+    )
     if (projections !== undefined) this.projections.seed(projections)
     const buffered = this.liveBuffer
     this.liveBuffer = []
@@ -676,6 +686,15 @@ export class Session implements SessionFace {
     this.views.push(view)
     if (event.type === 'turn/start') this.firstPromptPendingTurn = false
     const queueChanged = this.queueMirror.acceptDurable(event)
+    if (event.type === 'turn/start') {
+      const repaired = repairRepeatedEmptyTurnBoundaries(
+        this.events.map((candidate, index) => ({ event: candidate, view: this.views[index] })),
+      )
+      if (repaired.length !== this.events.length) {
+        this.conversation.replaceWindow(repaired, this.hasMore)
+        return 'immediate'
+      }
+    }
     const publication = this.conversation.append({ event, view })
     return queueChanged ? 'immediate' : publication
   }
@@ -786,6 +805,46 @@ export class Session implements SessionFace {
 /** Convert one wire history row into the assembler's transport-neutral input. */
 function conversationInput(entry: HistoryEntry): ConversationEventInput {
   return { event: entry.event, view: entry.view }
+}
+
+/**
+ * Remove an earlier context-only turn's boundaries when a later real turn
+ * reused its number. Context messages stay as session-level nodes; raw events
+ * and model history remain unchanged. A turn containing human, assistant,
+ * step, or tool activity remains intact for the assembler to reject.
+ * @param entries - raw history entries in ascending sequence order.
+ * @returns the conversation projection input, possibly without obsolete boundaries.
+ */
+function repairRepeatedEmptyTurnBoundaries(
+  entries: readonly ConversationEventInput[],
+): ConversationEventInput[] {
+  const starts = new Map<number, number>()
+  const dropped = new Set<number>()
+  for (let index = 0; index < entries.length; index++) {
+    const event = entries[index]?.event
+    if (event?.type !== 'turn/start') continue
+    const previousStart = starts.get(event.data.turn)
+    starts.set(event.data.turn, index)
+    if (previousStart === undefined) continue
+    let previousEnd: number | undefined
+    let activationOnly = true
+    for (let cursor = previousStart + 1; cursor < index; cursor++) {
+      const candidate = entries[cursor]?.event
+      if (candidate === undefined) continue
+      if (candidate.type === 'turn/end' && candidate.data.turn === event.data.turn) {
+        previousEnd = cursor
+      } else if (candidate.type === 'agent/inbox/spliced' || candidate.type === 'session/end-seed') {
+        continue
+      } else if (candidate.type === 'user/message') {
+        if (candidate.data.source.kind === 'user') activationOnly = false
+      } else activationOnly = false
+    }
+    if (previousEnd !== undefined && activationOnly) {
+      dropped.add(previousStart)
+      dropped.add(previousEnd)
+    }
+  }
+  return dropped.size === 0 ? [...entries] : entries.filter((_entry, index) => !dropped.has(index))
 }
 
 /** A generic command row alone remains control-plane content; every other visible Chat Node activates the conversation. */

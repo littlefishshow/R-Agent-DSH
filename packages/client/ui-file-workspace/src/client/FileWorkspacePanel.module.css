@@ -198,16 +198,28 @@
 }
 
 .treeRow {
+  position: relative;
   display: flex;
   align-items: center;
-  position: relative;
-  min-height: 32px;
-  margin: 0 4px;
+  gap: 6px;
   border-radius: 8px;
   font-size: 14px;
   line-height: 20px;
   color: var(--dsw-alias-label-primary);
+  user-select: none;
   transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.treeRow + .treeRow {
+  margin-top: 2px;
+}
+
+.treeDirectoryRow {
+  height: 34px;
+}
+
+.treeFileRow {
+  height: 32px;
 }
 
 .treeRow:hover {
@@ -224,8 +236,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
-  padding: 0 8px;
+  align-self: stretch;
+  padding: 0;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -290,17 +302,18 @@
 
 .treeMenuButton {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   opacity: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   padding: 0;
-  margin-right: 4px;
+  margin-right: 8px;
   cursor: pointer;
 }
 
@@ -311,7 +324,6 @@
 
 .treeMenuButton:hover {
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .doc {
@@ -383,6 +395,47 @@
   font-family: var(--dsw-font-mono, monospace);
   font-size: calc(13px * var(--dsh-file-font-scale, 1));
   line-height: 1.6;
+}
+
+.textPreview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 16px;
+  color: var(--dsw-alias-text-1);
+  font-family: var(--dsw-font-mono, monospace);
+  font-size: calc(13px * var(--dsh-file-font-scale, 1));
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.imagePreview {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
+}
+
+.imagePreview img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.unsupportedPreview {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
 }
 
 .rendered {

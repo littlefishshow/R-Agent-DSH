@@ -16,7 +16,7 @@ export const FILE_WORKBENCH_CHANNEL = '/rpc-fileworkbench'
 
 /** File-workbench endpoint names (channel-relative). */
 export const FILE_WORKBENCH_ENDPOINTS = {
-  /** List one directory level (child directories and files). */
+  /** List one directory level. */
   listDir: 'listDir',
   /** Read one text document's full content plus its freshness version. */
   readText: 'readText',
@@ -46,7 +46,7 @@ export interface FileWorkbenchEntry {
   path: string
   /** Whether this entry is a directory or a file. */
   kind: 'directory' | 'file'
-  /** Whether this file is an editable text document (Markdown or plain text). */
+  /** Whether this file is a supported UTF-8 text document. */
   editable: boolean
 }
 
@@ -56,7 +56,7 @@ export interface ListDirRequest {
   path: string
 }
 
-/** `listDir` response: the listed directory's direct children (directories first, then files, name-sorted). */
+/** `listDir` response: direct children, directories first and name-sorted. */
 export interface ListDirResponse {
   /** Absolute path echoed back. */
   path: string
@@ -103,6 +103,18 @@ export interface StartSelectionSessionRequest {
   action: SelectionAction
   /** Required human question for ask, or requested edit for modify. */
   instruction?: string
+  /** Browser-generated identity shared by the durable highlight and sub-window. */
+  selectionId: string
+  /** Start offset in the rendered readable-text projection. */
+  visibleStart: number
+  /** Selected occurrence of the readable text, zero-based. */
+  occurrence: number
+  /** Start offset of the line-aligned Markdown source range. */
+  sourceStart: number
+  /** End offset of the line-aligned Markdown source range. */
+  sourceEnd: number
+  /** Stable color assignment for the highlight and window. */
+  colorIndex: number
 }
 
 /** `startSelectionSession` response. */

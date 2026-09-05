@@ -49,15 +49,17 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Parameter
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
-    if (!String(session.id).startsWith(CHILD_PREFIX) || session.header.seedLength !== 0) return
+    const fileParent = String(session.id).startsWith(PARENT_PREFIX)
+    const selectionChild = String(session.id).startsWith(CHILD_PREFIX) && session.header.seedLength === 0
+    if (!fileParent && !selectionChild) return
     if (event.type === 'user/message') {
       const message: UserMessage = event.data
       if (message.source.kind === 'plugin' && message.source.plugin === FILE_CONTEXT_PLUGIN
         && fileContextCount(session) !== 0) {
-        fail(`selection session "${session.id}" cannot append a second file context`)
+        fail(`${fileParent ? 'file parent' : 'selection'} session "${session.id}" cannot append a second file context`)
       }
     }
-    if (event.type === 'turn/end' && fileContextCount(session) !== 1) {
+    if (selectionChild && event.type === 'turn/end' && fileContextCount(session) !== 1) {
       fail(`selection session "${session.id}" cannot complete its first turn without one file context`)
     }
   }, { global: true })

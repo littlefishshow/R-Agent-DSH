@@ -18,12 +18,13 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import type { AgentHandle, ModelSelection, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, ModelSelection, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
@@ -43,8 +44,14 @@ import {
   type StartSelectionSessionResponse,
   type WriteTextResponse,
 } from './protocol.ts'
+import {
+  FILE_WORKBENCH_SELECTION_SOURCE_FIELD,
+  fileWorkbenchSelectionProjectionDefinition,
+  type FileWorkbenchSelectionProjection,
+} from './selection-projection.ts'
 
 export * from './protocol.ts'
+export * from './selection-projection.ts'
 
 /** Cordis function-plugin name. */
 export const name = 'host-fileworkbench-io'
@@ -54,15 +61,25 @@ export const inject = [
   'agentDefaultModel', 'agentPresets', 'sessionTitle',
 ]
 
-/** Editable document extensions this backend reads and writes (lowercased, with dot). */
-const EDITABLE_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])
+/** Text extensions this backend reads and writes as UTF-8 (lowercased, with dot). */
+const EDITABLE_EXTENSIONS = new Set([
+  '.bash', '.c', '.cc', '.cpp', '.css', '.csv', '.env', '.go', '.h', '.hpp',
+  '.html', '.ini', '.java', '.js', '.json', '.jsx', '.kt', '.kts', '.less',
+  '.lua', '.md', '.markdown', '.mjs', '.mts', '.php', '.py', '.rb', '.rs',
+  '.scss', '.sh', '.sql', '.svelte', '.toml', '.ts', '.tsx', '.txt', '.vue',
+  '.xml', '.yaml', '.yml', '.zsh',
+])
+/** Extension-less text filenames commonly used in source workspaces. */
+const EDITABLE_FILENAMES = new Set([
+  '.env', '.gitignore', '.npmrc', 'Dockerfile', 'LICENSE', 'Makefile', 'README',
+])
 /** Inclusive byte cap on a single text read/write, guarding against a huge or binary file. */
 const MAX_TEXT_BYTES = 8 * 1024 * 1024
 /** Inclusive image byte cap: enough for document figures without unbounded RPC payloads. */
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024
 /** Parent-id namespace for the Agent-driven file-context log format. */
 const FILE_SESSION_ID_PREFIX = 'file-workbench-v2-'
-/** Message source used only to open the file parent's non-model root turn. */
+/** Message source used only to create the file parent's model-free root turn. */
 const FILE_ROOT_PLUGIN = `${name}:file-root`
 /** Message source used only for a selection child's hidden opening prompt. */
 const SELECTION_PROMPT_PLUGIN = `${name}:selection-prompt`
@@ -110,6 +127,15 @@ function optionalString(payload: unknown, key: string): string | undefined {
   return value
 }
 
+/** A non-negative integer field on the wire, or a `bad-request` failure. */
+function requireNonnegativeInteger(payload: unknown, key: string): number {
+  const value = (payload as Record<string, unknown> | null)?.[key]
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw badRequest(`field ${JSON.stringify(key)} must be a non-negative integer`)
+  }
+  return value
+}
+
 /** A business error surfaced through the shared RPC error vocabulary. */
 class WorkbenchError extends Error {
   constructor(
@@ -147,9 +173,10 @@ function requireSegment(name: string): string {
 
 /** Whether a basename is an editable text document by extension. */
 function isEditable(name: string): boolean {
-  const dot = name.lastIndexOf('.')
-  const ext = dot < 0 ? '' : name.slice(dot).toLowerCase()
-  return EDITABLE_EXTENSIONS.has(ext)
+  const fileName = basename(name)
+  const dot = fileName.lastIndexOf('.')
+  const ext = dot < 0 ? '' : fileName.slice(dot).toLowerCase()
+  return EDITABLE_EXTENSIONS.has(ext) || EDITABLE_FILENAMES.has(fileName)
 }
 
 /** Node error code, when the thrown value carries one. */
@@ -210,6 +237,17 @@ export function fileSessionId(workspaceId: string, path: string): SessionId {
   return SessionId(`${FILE_SESSION_ID_PREFIX}${digest}`)
 }
 
+/**
+ * Build the conversation-tree label for one file parent.
+ * @param workspacePath - absolute Workspace root.
+ * @param path - absolute document path.
+ * @returns a stable file marker plus the Workspace-relative path.
+ */
+export function fileSessionTitle(workspacePath: string, path: string): string {
+  const relativePath = relative(workspacePath, path)
+  return `[File] ${relativePath === '' ? basename(path) : relativePath}`
+}
+
 /** Whether one admitted message is this plugin's complete-file snapshot. */
 function isDocumentContext(message: UserMessage): boolean {
   return message.source.kind === 'plugin' && message.source.plugin === name
@@ -226,7 +264,7 @@ function visibleDocumentContextCount(messages: readonly { role: string; source: 
     message.role === 'user' && isDocumentContext(message as UserMessage)).length
 }
 
-/** Whether one queued message exists only to make a file root list-visible. */
+/** Whether one queued message creates a file root without entering a model step. */
 function isFileRootActivation(message: UserMessage): boolean {
   return message.source.kind === 'plugin' && message.source.plugin === FILE_ROOT_PLUGIN
 }
@@ -322,11 +360,12 @@ interface OwnedSelectionSession {
 
 /**
  * Owns file-parent and selection-child Agent lifecycles for this plugin.
- * Parent logs provide stable tree roots without document content. Every child
- * logs one complete-file context before its independent selection prompt.
+ * A parent records the first cached file context in a model-free turn. Every
+ * child starts without inherited events and logs one child-local file context
+ * before its independent selection prompt.
  */
 class SelectionSessions {
-  private readonly parents = new Map<SessionId, Promise<AgentHandle>>()
+  private readonly parents = new Map<SessionId, Promise<Agent>>()
   private readonly children = new Map<SessionId, OwnedSelectionSession>()
 
   constructor(private readonly ctx: Context, private readonly files: FileWorkbench) {}
@@ -336,12 +375,18 @@ class SelectionSessions {
     installModelSelection(agentCtx, { current: model, assembled: undefined })
   }
 
-  /** Consume the file-root activation inside a completed turn without issuing a model request. */
-  private installParentActivation(agentCtx: Context): void {
-    agentCtx.on('agent/pre-step', async ({ messages }, next): Promise<PreStepDecision> => {
+  /** Persist the root's file context, then close its activation turn before a model step. */
+  private installParentActivation(agentCtx: Context): () => void {
+    return agentCtx.on('agent/pre-step', async ({ agent, messages }, next): Promise<PreStepDecision> => {
       if (messages.length !== 1 || !isFileRootActivation(messages[0] as UserMessage)) return next()
       const decision = await next()
-      return decision.kind === 'reject' ? decision : { kind: 'enter', messages: [] }
+      if (decision.kind === 'reject') return decision
+      const activation = messages[0] as UserMessage
+      agent.session.append('user/message', createUserMessage({
+        content: activation.content,
+        source: { kind: 'plugin', plugin: name },
+      }), { surfaceOp: 'append' })
+      return { kind: 'enter', messages: [] }
     }, { prepend: true })
   }
 
@@ -353,8 +398,8 @@ class SelectionSessions {
     const path = requireAbsolute(input.path)
     assertWorkspacePath(workspace.path, path)
     const read = await this.files.selectionSnapshot(path, input.expectedVersion)
-    const parentHandle = await this.ensureParent(workspace.id, workspace.path, path)
-    const parent = parentHandle.agent.session
+    const parentAgent = await this.ensureParent(workspace.id, workspace.path, path, read)
+    const parent = parentAgent.session
     const childId = SessionId(`file-selection-${randomUUID()}`)
     const presetId = resolveSessionPreset(parent)
     const model = this.ctx.agentDefaultModel.currentSelection()
@@ -369,7 +414,7 @@ class SelectionSessions {
       agentOptions: { provider: model.provider, model: model.model },
       setup: (agentCtx) => {
         this.installModel(agentCtx, model)
-        this.ctx.agentPresets.composeFrom(agentCtx, parentHandle.agent.ctx)
+        this.ctx.agentPresets.composeFrom(agentCtx, parentAgent.ctx)
       },
     })
     const owned: OwnedSelectionSession = {
@@ -383,15 +428,37 @@ class SelectionSessions {
       await workspace.attachSession(childId)
       const title = selectionTitle(input)
       this.ctx.sessionTitle.rename(childHandle.agent.session, title)
+      const selection: FileWorkbenchSelectionProjection = {
+        id: input.selectionId,
+        workspaceId: input.workspaceId,
+        path,
+        fileVersion: read.version,
+        selectedText: input.selectedText,
+        lineContext: input.lineContext,
+        action: input.action,
+        visibleStart: input.visibleStart,
+        occurrence: input.occurrence,
+        sourceStart: input.sourceStart,
+        sourceEnd: input.sourceEnd,
+        colorIndex: input.colorIndex,
+        title,
+        branchStartSeq: -1,
+      }
       childHandle.agent.inject(createUserMessage({
         content: [{ type: 'text', text: documentContext(read) }],
         source: { kind: 'plugin', plugin: name },
       }))
       const openingMessage = createUserMessage({
         content: [{ type: 'text', text: prompt }],
-        source: { kind: 'plugin', plugin: SELECTION_PROMPT_PLUGIN, form: 'instructions' },
+        source: {
+          kind: 'plugin',
+          plugin: SELECTION_PROMPT_PLUGIN,
+          form: 'instructions',
+          [FILE_WORKBENCH_SELECTION_SOURCE_FIELD]: selection,
+        },
       })
-      childHandle.agent.followup(openingMessage)
+      await this.admitOpeningMessage(childHandle, openingMessage)
+      await this.ctx.sessions.flush(childHandle.agent.session)
       return {
         fileSessionId: parent.id,
         sessionId: childId,
@@ -404,6 +471,29 @@ class SelectionSessions {
       await workspace.detachSession(childId)
       await this.ctx.sessionPersistence.delete(childId)
       throw error
+    }
+  }
+
+  /** Queue the child's hidden opening instruction and wait until it commits to the log. */
+  private async admitOpeningMessage(handle: AgentHandle, message: UserMessage): Promise<void> {
+    let admitted = false
+    let resolveAdmission: (() => void) | undefined
+    const admission = new Promise<void>((resolvePromise) => { resolveAdmission = resolvePromise })
+    const dispose = this.ctx.on('session/event', (session, event) => {
+      if (session !== handle.agent.session || event.type !== 'user/message' || event.data.id !== message.id) return
+      admitted = true
+      resolveAdmission?.()
+    }, { global: true })
+    try {
+      handle.agent.followup(message)
+      await Promise.race([
+        admission,
+        handle.agent.whenIdle().then(() => {
+          if (!admitted) throw new Error(`selection session "${handle.agent.id}" did not admit its opening prompt`)
+        }),
+      ])
+    } finally {
+      dispose()
     }
   }
 
@@ -447,13 +537,13 @@ class SelectionSessions {
     workspaceId: ReturnType<typeof WorkspaceId>,
     cwd: string,
     path: string,
-  ): Promise<AgentHandle> {
+    read: ReadTextResponse,
+  ): Promise<Agent> {
     const id = fileSessionId(String(workspaceId), path)
     let pending = this.parents.get(id)
     if (pending === undefined) {
-      pending = this.openParent(id, workspaceId, cwd, path).catch((error: unknown) => {
-        this.parents.delete(id)
-        throw error
+      pending = this.openParent(id, workspaceId, cwd, path, read).finally(() => {
+        if (this.parents.get(id) === pending) this.parents.delete(id)
       })
       this.parents.set(id, pending)
     }
@@ -465,7 +555,13 @@ class SelectionSessions {
     workspaceId: ReturnType<typeof WorkspaceId>,
     cwd: string,
     path: string,
-  ): Promise<AgentHandle> {
+    read: ReadTextResponse,
+  ): Promise<Agent> {
+    const live = this.ctx.agents.get(id)
+    if (live !== undefined) {
+      await this.prepareParent(live, workspaceId, cwd, path, read, true)
+      return live
+    }
     const stored = (await this.ctx.sessionPersistence.list()).find(header => header.id === id)
     let handle: AgentHandle | undefined
     try {
@@ -482,7 +578,6 @@ class SelectionSessions {
             void await this.ctx.agentPresets.mount(agentCtx, presetId)
           },
         })
-        this.ctx.sessionTitle.rename(handle.agent.session, basename(path))
       } else {
         if (stored.cwd !== cwd) {
           throw new Error(`file parent session "${id}" belongs to another workspace`)
@@ -500,28 +595,63 @@ class SelectionSessions {
           },
         })
       }
-      const workspace = this.ctx.workspaceRegistry.get(workspaceId)
-      if (workspace === undefined) throw badRequest(`workspace not found: ${workspaceId}`)
-      await workspace.attachSession(id)
-      await this.activateParent(handle.agent)
-      return handle
+      await this.prepareParent(handle.agent, workspaceId, cwd, path, read, false)
+      return handle.agent
     } catch (error: unknown) {
+      const raced = this.ctx.agents.get(id)
+      if (handle === undefined && raced !== undefined) {
+        await this.prepareParent(raced, workspaceId, cwd, path, read, true)
+        return raced
+      }
       if (handle !== undefined) await handle.dispose()
       if (stored === undefined) await this.ctx.sessionPersistence.delete(id)
       throw error
     }
   }
 
-  /** Make a new file root visible without adding a model-facing message. */
-  private async activateParent(agent: AgentHandle['agent']): Promise<void> {
-    if (agent.session.events.some(event => event.type === 'turn/start')) return
+  /** Validate and expose one live file parent without claiming its teardown capability. */
+  private async prepareParent(
+    agent: Agent,
+    workspaceId: ReturnType<typeof WorkspaceId>,
+    cwd: string,
+    path: string,
+    read: ReadTextResponse,
+    borrowed: boolean,
+  ): Promise<void> {
+    if (agent.session.header.cwd !== cwd) {
+      throw new Error(`file parent session "${agent.id}" belongs to another workspace`)
+    }
+    const title = fileSessionTitle(cwd, path)
+    if (this.ctx.sessionTitle.get(agent.session)?.title !== title) {
+      this.ctx.sessionTitle.rename(agent.session, title)
+    }
+    const workspace = this.ctx.workspaceRegistry.get(workspaceId)
+    if (workspace === undefined) throw badRequest(`workspace not found: ${workspaceId}`)
+    await workspace.attachSession(agent.id)
+    await this.ctx.workspaceRegistry.unarchiveSession(agent.id)
+    if (visibleDocumentContextCount(agent.session.deriveMessages()) > 0) return
+    if (!borrowed) {
+      await this.activateParent(agent, read)
+      return
+    }
+    const disposeActivation = this.installParentActivation(agent.ctx)
+    try {
+      await this.activateParent(agent, read)
+    } finally {
+      disposeActivation()
+    }
+  }
+
+  /** Store the first cached file snapshot in an Agent-owned turn without invoking a model. */
+  private async activateParent(agent: AgentHandle['agent'], read: ReadTextResponse): Promise<void> {
+    if (visibleDocumentContextCount(agent.session.deriveMessages()) > 0) return
     agent.followup(createUserMessage({
-      content: [{ type: 'text', text: '' }],
+      content: [{ type: 'text', text: documentContext(read) }],
       source: { kind: 'plugin', plugin: FILE_ROOT_PLUGIN },
     }))
     await agent.whenIdle()
-    if (!agent.session.events.some(event => event.type === 'turn/start')) {
-      throw new Error(`file parent session "${agent.id}" did not complete its activation turn`)
+    if (visibleDocumentContextCount(agent.session.deriveMessages()) !== 1) {
+      throw new Error(`file parent session "${agent.id}" did not record its file context`)
     }
     await this.ctx.sessions.flush(agent.session)
   }
@@ -547,7 +677,7 @@ export class FileWorkbench {
   }
 
   /**
-   * List one directory level: child directories then files, name-sorted.
+   * List one directory level: directories first, then files, name-sorted.
    * @param path - absolute directory path.
    * @returns the directory's direct children.
    */
@@ -565,7 +695,7 @@ export class FileWorkbench {
     const dirs: FileWorkbenchEntry[] = []
     const files: FileWorkbenchEntry[] = []
     for (const dirent of dirents) {
-      /* v8 ignore start -- a non-file, non-directory dirent (socket, fifo, device) is skipped; not producible in a temp dir. */
+      /* v8 ignore start -- sockets and devices are not regular file-tree entries. */
       if (dirent.isDirectory()) dirs.push(this.entryOf(dir, dirent.name, 'directory'))
       else if (dirent.isFile()) files.push(this.entryOf(dir, dirent.name, 'file'))
       /* v8 ignore stop */
@@ -832,9 +962,18 @@ export function toResult(error: unknown): Extract<RpcResult<never>, { ok: false 
  * @param ctx - host context carrying `ctx.connection`.
  * @param config - validated plugin configuration.
  */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   const workbench = new FileWorkbench()
   const selections = new SelectionSessions(ctx, workbench)
+  for (const sessionId of ctx.workspaceRegistry.archivedSessionIds) {
+    if (String(sessionId).startsWith('file-workbench-')
+      || String(sessionId).startsWith('file-selection-')) {
+      await ctx.workspaceRegistry.unarchiveSession(sessionId)
+    }
+  }
+  ctx.inject(['sessionProjections'], (projectionCtx) => {
+    projectionCtx.sessionProjections.register(fileWorkbenchSelectionProjectionDefinition)
+  })
   ctx.on('agent/pre-step', async (payload, next): Promise<PreStepDecision> => {
     const decision = await next()
     if (decision.kind === 'reject') return decision
@@ -876,6 +1015,12 @@ export function apply(ctx: Context, config: Config): void {
                 selectedText: requireString(payload, 'selectedText'),
                 lineContext: requireString(payload, 'lineContext'),
                 action: requireSelectionAction(payload),
+                selectionId: requireString(payload, 'selectionId'),
+                visibleStart: requireNonnegativeInteger(payload, 'visibleStart'),
+                occurrence: requireNonnegativeInteger(payload, 'occurrence'),
+                sourceStart: requireNonnegativeInteger(payload, 'sourceStart'),
+                sourceEnd: requireNonnegativeInteger(payload, 'sourceEnd'),
+                colorIndex: requireNonnegativeInteger(payload, 'colorIndex'),
                 ...instruction === undefined ? {} : { instruction },
               }),
             }

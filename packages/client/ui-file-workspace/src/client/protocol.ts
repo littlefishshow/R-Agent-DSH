@@ -31,11 +31,11 @@ export interface FileWorkbenchEntry {
   path: string
   /** Whether this entry is a directory or a file. */
   kind: 'directory' | 'file'
-  /** Whether this file is an editable text document (Markdown or plain text). */
+  /** Whether this file is a supported UTF-8 text document. */
   editable: boolean
 }
 
-/** `listDir` response: the listed directory's direct children (directories first, then files, name-sorted). */
+/** `listDir` response: direct children, directories first and name-sorted. */
 export interface ListDirResponse {
   /** Absolute path echoed back. */
   path: string
@@ -60,6 +60,30 @@ export interface ReadTextResponse {
 /** Selection action supported by the file workbench. */
 export type SelectionAction = 'modify' | 'ask' | 'explain' | 'summarize'
 
+/** Durable child projection used to restore its highlight and sub-window. */
+export interface FileWorkbenchSelectionProjection {
+  id: string
+  workspaceId: string
+  path: string
+  fileVersion: string
+  selectedText: string
+  lineContext: string
+  action: SelectionAction
+  visibleStart: number
+  occurrence: number
+  sourceStart: number
+  sourceEnd: number
+  colorIndex: number
+  title: string
+  branchStartSeq: number
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    fileWorkbenchSelection: FileWorkbenchSelectionProjection | null
+  }
+}
+
 /** `startSelectionSession` request. */
 export interface StartSelectionSessionRequest {
   workspaceId: string
@@ -69,6 +93,12 @@ export interface StartSelectionSessionRequest {
   lineContext: string
   action: SelectionAction
   instruction?: string
+  selectionId: string
+  visibleStart: number
+  occurrence: number
+  sourceStart: number
+  sourceEnd: number
+  colorIndex: number
 }
 
 /** `startSelectionSession` response. */

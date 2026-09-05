@@ -55,6 +55,7 @@ function SubWindow(props: {
   const childSessionId = win.sessionId
   const [followUp, setFollowUp] = useState('')
   const [sendError, setSendError] = useState<string | undefined>(undefined)
+  const composingRef = useRef(false)
   const dragState = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null)
   const resizeState = useRef<{
     startX: number
@@ -120,6 +121,12 @@ function SubWindow(props: {
         lineContext: win.lineContext,
         action: win.action,
         instruction: text,
+        selectionId: win.id,
+        visibleStart: win.visibleStart,
+        occurrence: win.occurrence,
+        sourceStart: win.sourceStart,
+        sourceEnd: win.sourceEnd,
+        colorIndex: win.colorIndex,
       }).then((branch) => {
         actions.attachWindowBranch(win.id, branch)
       }).catch((error: unknown) => {
@@ -255,7 +262,16 @@ function SubWindow(props: {
             : t('window.sendPlaceholder')}
           disabled={win.phase === 'creating' || win.phase === 'deleting' || win.phase === 'cleanup-error'}
           onChange={(e) => { setFollowUp(e.target.value) }}
-          onKeyDown={(e) => { if (e.key === 'Enter') sendFollowUp() }}
+          onCompositionStart={() => { composingRef.current = true }}
+          onCompositionEnd={() => {
+            window.setTimeout(() => { composingRef.current = false }, 10)
+          }}
+          onKeyDown={(e) => {
+            // keyCode 229 is the legacy IME-composition signal engines emit without isComposing.
+            // oxlint-disable-next-line typescript/no-deprecated
+            const composing = composingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229
+            if (e.key === 'Enter' && !composing) sendFollowUp()
+          }}
         />
         {view?.running && childSessionId !== undefined
           ? (
@@ -289,13 +305,58 @@ function SubWindow(props: {
 }
 
 /** The selection sub-windows layer and its minimized dock. */
-export function SubWindows({ useStore, useChildViews, actions, ...injected }: SubWindowsProps) {
+export function SubWindows({
+  useStore, useChildViews, useMode, useRestorableSelections, actions, ...injected
+}: SubWindowsProps) {
   const windows = useStore(s => s.windows)
   const documents = useStore(s => s.documents)
   const highlights = useStore(s => s.highlights)
   const childViews = useChildViews(views => views)
+  const mode = useMode(value => value)
+  const restorable = useRestorableSelections(value => value)
+  const readText = injected.readText
   const t = injected.t
   const deleting = useRef(new Set<string>())
+  const restoring = useRef(new Set<string>())
+  const restoredDocuments = useRef(new Set<string>())
+
+  useEffect(() => {
+    if (mode !== 'files') return
+    for (const selection of restorable.items) actions.restoreSelection(selection)
+    if (restorable.phase === 'ready') {
+      actions.reconcileRestorableSelections(restorable.items.map(selection => selection.sessionId))
+    }
+  }, [actions, mode, restorable])
+
+  useEffect(() => {
+    if (mode !== 'files') return
+    for (const selection of restorable.items) {
+      if (documents[selection.path] !== undefined
+        || restoring.current.has(selection.path)
+        || restoredDocuments.current.has(selection.path)) continue
+      restoring.current.add(selection.path)
+      restoredDocuments.current.add(selection.path)
+      void readText(selection.path).then((read) => {
+        actions.restoreDocument({
+          path: read.path,
+          content: read.content,
+          version: read.version,
+          workspaceId: selection.workspaceId,
+          previewKind: 'markdown',
+          draft: read.content,
+          dirty: false,
+          viewMode: 'preview',
+        })
+      }).catch((error: unknown) => {
+        actions.setWindowError(
+          selection.id,
+          error instanceof Error ? error.message : String(error),
+        )
+      }).finally(() => {
+        restoring.current.delete(selection.path)
+      })
+    }
+  }, [actions, documents, mode, readText, restorable.items])
 
   const onDelete = useCallback((win: SubWindowRecord) => {
     if (deleting.current.has(win.id)) return
@@ -353,7 +414,7 @@ export function SubWindows({ useStore, useChildViews, actions, ...injected }: Su
   }, [actions, documents, highlights, injected, onDelete, t])
 
   const open = Object.values(windows).filter(w => !w.minimized)
-  const minimized = Object.values(windows).filter(w => w.minimized)
+  const minimized = Object.values(windows).filter(w => w.minimized && !w.dockHidden)
 
   return createPortal((
     <div className={css.portalLayer}>
@@ -391,12 +452,12 @@ export function SubWindows({ useStore, useChildViews, actions, ...injected }: Su
               </button>
               <button
                 type="button"
-                className={css.dockClose}
-                aria-label={t('window.close')}
-                disabled={win.phase === 'creating' || win.phase === 'deleting'}
-                onClick={() => { onDelete(win) }}
+                className={css.dockHide}
+                aria-label={t('window.hideDock')}
+                title={t('window.hideDock')}
+                onClick={() => { actions.hideWindowDock(win.id) }}
               >
-                <IconCloseOutline16 size={14} />
+                <span aria-hidden="true">−</span>
               </button>
             </div>
           ))}

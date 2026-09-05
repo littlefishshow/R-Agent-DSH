@@ -64,6 +64,9 @@ describe('FileSidebar', () => {
     const listDir = vi.fn(() => Promise.resolve([
       { name: 'docs', path: '/workspace/docs', kind: 'directory' as const, editable: false },
       { name: 'README.md', path: '/workspace/README.md', kind: 'file' as const, editable: true },
+      { name: 'script.py', path: '/workspace/script.py', kind: 'file' as const, editable: true },
+      { name: 'diagram.png', path: '/workspace/diagram.png', kind: 'file' as const, editable: false },
+      { name: 'paper.pdf', path: '/workspace/paper.pdf', kind: 'file' as const, editable: false },
     ]))
     const noopAsync = () => Promise.resolve(undefined)
     return {
@@ -74,8 +77,18 @@ describe('FileSidebar', () => {
       useMode: bindSnapshotSelector(mode),
       useWorkspaces: bindSnapshotSelector(createSnapshotStore(workspaceState([workspace]))),
       listDir,
-      readText: vi.fn(),
-      readImage: vi.fn(),
+      readText: vi.fn(async (path: string) => ({
+        path,
+        content: 'print("hello")',
+        version: 'v1',
+        fileIndex: path,
+        updatedAt: '2026-09-02T00:00:00.000Z',
+      })),
+      readImage: vi.fn(async (path: string) => ({
+        path,
+        mediaType: 'image/png' as const,
+        dataUrl: 'data:image/png;base64,AQ==',
+      })),
       writeText: vi.fn(),
       createEntry: vi.fn(),
       deleteEntry: vi.fn(noopAsync),
@@ -100,10 +113,33 @@ describe('FileSidebar', () => {
     const componentProps = props()
     render(<FileSidebar {...componentProps} />)
 
-    expect(screen.getByText('Workspace Files')).toBeTruthy()
+    expect(screen.getByText('Workspaces')).toBeTruthy()
     expect(screen.getByText('Shared Workspace')).toBeTruthy()
     await waitFor(() => { expect(componentProps.listDir).toHaveBeenCalledWith('/workspace') })
     await waitFor(() => { expect(screen.getByText('README.md')).toBeTruthy() })
+    expect(screen.getByText('script.py')).toBeTruthy()
+    expect(screen.getByText('diagram.png')).toBeTruthy()
+    expect(screen.getByText('paper.pdf')).toBeTruthy()
+  })
+
+  it('opens source text, images, and unsupported binary files with distinct preview kinds', async () => {
+    const componentProps = props()
+    render(<FileSidebar {...componentProps} />)
+    await screen.findByText('script.py')
+
+    fireEvent.click(screen.getByRole('button', { name: 'script.py' }))
+    await waitFor(() => {
+      expect(componentProps.readText).toHaveBeenCalledWith('/workspace/script.py')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'diagram.png' }))
+    await waitFor(() => {
+      expect(componentProps.readImage).toHaveBeenCalledWith('/workspace/diagram.png')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'paper.pdf' }))
+    expect(componentProps.readText).not.toHaveBeenCalledWith('/workspace/paper.pdf')
+    expect(componentProps.readImage).not.toHaveBeenCalledWith('/workspace/paper.pdf')
   })
 
   it('dismisses a file action menu when the next pointer interaction lands outside its row', async () => {

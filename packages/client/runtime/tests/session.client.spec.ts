@@ -7,6 +7,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-commands/types'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -176,6 +177,80 @@ function histResponse(events: SessionEvent[], hasMore = false) {
 }
 
 describe('open', () => {
+  it('opens a legacy File Workbench root whose activation reused the first real turn number', async () => {
+    const turnDefinition: ConversationNodeDefinition<number> = {
+      kind: 'legacy-turn',
+      match: event => event.type === 'turn/start'
+        ? { id: String(event.data.turn), role: 'start' }
+        : null,
+      start: (_context, match) => match.event.type === 'turn/start' ? match.event.data.turn : 0,
+      update: context => context.state,
+    }
+    const conversation: ConversationRuntime = {
+      events: {
+        entries: () => [turnDefinition],
+        fallbackEntry: () => undefined,
+      } as unknown as ConversationRuntime['events'],
+      views: {
+        entries: () => [],
+      } as unknown as ConversationRuntime['views'],
+    }
+    const api = new FakeApiClient()
+    const fileContext = {
+      ...ev.user(1, '<file_context>cached</file_context>'),
+      data: createUserMessage({
+        content: [{ type: 'text', text: '<file_context>cached</file_context>' }],
+        source: { kind: 'plugin', plugin: 'host-fileworkbench-io' },
+      }),
+    } as SessionEvent
+    api.onHistory = () => histResponse([
+      ev.turnStart(0, 1),
+      fileContext,
+      ev.turnEnd(2, 1),
+      ...plainTurn(3, 1, 'real question', 'real answer'),
+    ])
+    const session = new Session(
+      'file-workbench-v2-parent' as SessionId,
+      api,
+      fakeRemote(),
+      { conversation },
+    )
+
+    await session.open()
+
+    expect(session.getSnapshot()).toMatchObject({ openState: 'open', openError: null })
+  })
+
+  it('still rejects a reused turn number when the earlier turn had model work', async () => {
+    const turnDefinition: ConversationNodeDefinition<number> = {
+      kind: 'duplicate-turn',
+      match: event => event.type === 'turn/start'
+        ? { id: String(event.data.turn), role: 'start' }
+        : null,
+      start: (_context, match) => match.event.type === 'turn/start' ? match.event.data.turn : 0,
+      update: context => context.state,
+    }
+    const conversation: ConversationRuntime = {
+      events: {
+        entries: () => [turnDefinition],
+        fallbackEntry: () => undefined,
+      } as unknown as ConversationRuntime['events'],
+      views: {
+        entries: () => [],
+      } as unknown as ConversationRuntime['views'],
+    }
+    const api = new FakeApiClient()
+    api.onHistory = () => histResponse([
+      ...plainTurn(0, 1, 'first question', 'first answer'),
+      ...plainTurn(6, 1, 'second question', 'second answer'),
+    ])
+    const session = new Session(SID, api, fakeRemote(), { conversation })
+
+    await session.open()
+
+    expect(session.getSnapshot().openError?.message).toContain('received more than one start Match')
+  })
+
   it('keeps a bare Session blank until an authoritative lifecycle signal arrives', () => {
     const { session } = makeSession()
     expect(session.getSnapshot()).toMatchObject({ blank: true, composerPhase: 'blank' })
