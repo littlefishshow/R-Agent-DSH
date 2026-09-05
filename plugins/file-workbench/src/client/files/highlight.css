@@ -1,0 +1,7 @@
+/* Global (non-module) paint for the CSS Custom Highlight API. The registry name
+   `dsh-fw-selection` is literal here so it is not rewritten by CSS Modules; the
+   highlight-paint module registers every workbench selection range under it. */
+::highlight(dsh-fw-selection) {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent);
+  color: inherit;
+}

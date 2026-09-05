@@ -1,0 +1,9 @@
+[
+  { "name": "installed file/image/CRUD RPC", "files": ["guide.md", "pixel.png"] },
+  { "name": "four actions and independent children with one file snapshot each", "actions": ["ask", "explain", "summarize", "modify"], "modelRequests": 4 },
+  { "name": "follow-up and full history" },
+  { "name": "stream cancellation" },
+  { "name": "save and stale-version rejection" },
+  { "name": "live child deletion" },
+  { "name": "restart recovery and cold child deletion" }
+]

@@ -1,0 +1,25 @@
+# Compose after the standard base and web bundles. Original package files stay intact.
+# Preserve the existing JSONL root/compression/cache options and workspace state.
+- id: session-persistence-jsonl
+  disabled: true
+
+- id: workspace
+  disabled: true
+
+# Exclusive UI occupants are supplied by this bundle, using the original slots.
+- id: ui-layout
+  disabled: true
+- id: ui-sidebar
+  disabled: true
+- id: ui-workspace
+  disabled: true
+- id: ui-trajectory
+  disabled: true
+
+- insert:
+    - id: file-workbench-persistence
+      name: dsh-file-workbench/persistence
+    - id: file-workbench-workspaces
+      name: dsh-file-workbench/workspaces
+    - id: file-workbench
+      name: dsh-file-workbench
